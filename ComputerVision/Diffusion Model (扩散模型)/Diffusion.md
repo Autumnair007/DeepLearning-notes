@@ -1,4 +1,4 @@
-# Diffusion模型笔记
+# Diffusion模型笔记（Deepseek生成）
 
 学习资料：[Diffusion Model 深入剖析_扩散模型如何通过x输入图片-CSDN博客](https://jarod.blog.csdn.net/article/details/130903760)
 

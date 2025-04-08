@@ -1,4 +1,4 @@
-# GAN笔记
+# GAN笔记（Deepseek生成）
 
 学习资料：[图解 生成对抗网络GAN 原理 超详解_gan原理图-CSDN博客](https://blog.csdn.net/DFCED/article/details/105175097)
 
