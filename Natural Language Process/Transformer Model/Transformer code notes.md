@@ -1,511 +1,990 @@
 #  Transformer代码笔记（Gemini2.5Pro生成）
 
-ps: 自己的电脑用的是CPU，大概10分钟1轮。
+ps: 自己的电脑用的是GPU，1分钟左右一轮，显卡4060，显存8GB。
 
-代码主要分为以下几个部分：
+------
 
-1.  **导入库**: 引入必要的 Python 库。
-2.  **环境设置**: 配置运行环境，如设备（CPU/GPU）、随机种子和数据存储路径。
-3.  **数据处理**: 下载、解压、清洗、分词、构建词汇表，并将文本数据转换为模型可处理的格式。
-4.  **数据集类**: 定义 `Dataset` 类来组织和提供数据。
-5.  **模型定义**: 构建 Transformer 分类器模型。
-6.  **数据加载器**: 创建 `DataLoader` 以便在训练和评估时按批次加载数据。
-7.  **训练函数**: 定义模型训练逻辑。
-8.  **评估函数**: 定义模型评估逻辑（计算损失和准确率）。
-9.  **可视化函数**: 定义绘制混淆矩阵和训练历史曲线的函数。
-10. **主函数**: 整合所有部分，执行数据加载、模型训练、评估和结果保存。
-11. **执行入口**: 确保 `main` 函数在脚本直接运行时被调用。
+我们来详细分析一下这段使用 PyTorch 实现的基于 Transformer 的 IMDB 电影评论情感分类代码。我们将逐步分析每个部分，重点关注数据处理和模型结构。
 
----
-
-### 1. 导入库 (Imports)
+**1. 导入库和基本设置**
 
 ```python
-import torch                     # PyTorch 核心库，用于张量操作和神经网络
-import torch.nn as nn            # PyTorch 神经网络模块，包含各种层（如线性层、嵌入层）和损失函数
-import torch.optim as optim      # PyTorch 优化器模块，包含 Adam 等优化算法
-from torch.utils.data import Dataset, DataLoader # PyTorch 数据处理工具，用于创建自定义数据集和数据加载器
-import numpy as np               # NumPy 库，用于数值计算（主要用于评估指标）
-import matplotlib.pyplot as plt  # Matplotlib 库，用于绘制图表
-from sklearn.metrics import accuracy_score, confusion_matrix # Scikit-learn 库，用于计算准确率和混淆矩阵
-import seaborn as sns            # Seaborn 库，用于绘制更美观的统计图表（如热力图）
-import pandas as pd              # Pandas 库（在此代码中未使用，但常用于数据处理）
-import time                      # 时间库，用于计算训练耗时
-import re                        # 正则表达式库，用于文本清洗
-import os                        # 操作系统接口库，用于文件和目录操作
+import torch                     # PyTorch 核心库
+import torch.nn as nn            # 神经网络模块 (层, 激活函数, 损失函数等)
+import torch.optim as optim      # 优化器模块 (Adam, SGD 等)
+from torch.utils.data import Dataset, DataLoader # 数据集和数据加载工具
+import matplotlib.pyplot as plt  # 用于绘图 (损失曲线, 混淆矩阵等)
+from sklearn.metrics import accuracy_score, confusion_matrix # 评估指标 (准确率, 混淆矩阵)
+import seaborn as sns            # 用于绘制更美观的图表 (混淆矩阵热力图)
+import pandas as pd              # 数据处理库 (虽然这里没直接用，但常用于数据分析)
+import time                      # 用于计时 (计算训练耗时)
+import re                        # 正则表达式库 (用于文本清洗)
+import os                        # 操作系统接口 (文件路径操作, 创建目录等)
 import tarfile                   # 用于处理 .tar.gz 压缩文件
 import urllib.request            # 用于从 URL 下载文件
-from collections import Counter  # 用于统计词频，构建词汇表
+import random                    # 用于生成随机数 (打乱数据, 设置种子)
+import numpy as np               # NumPy 库 (用于数值计算, 设置种子)
+from collections import Counter   # 用于计数 (统计词频, 预测分布)
 from torch.nn.utils.rnn import pad_sequence # 用于将不同长度的序列填充到相同长度
-from tqdm import tqdm            # 用于显示进度条，方便跟踪长时间运行的任务
-```
+from tqdm import tqdm             # 用于显示进度条 (美化循环过程)
 
-这部分导入了所有需要的库。每个库都有其特定的用途，例如 PyTorch 用于构建和训练模型，Scikit-learn 用于评估，Matplotlib 和 Seaborn 用于可视化，os 和 re 用于数据处理等。
+# 设置随机种子以便结果可复现
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(42)
+# 解释: 为了让代码每次运行时产生相同的结果 (例如，模型初始化权重、数据打乱顺序等)，
+# 我们固定了 Python 内置 random, NumPy 和 PyTorch 的随机数生成器的种子。
+# 如果 CUDA 可用，也设置 CUDA 的随机种子。这对于调试和复现实验结果非常重要。
 
----
-
-### 2. 环境设置 (Setup)
-
-```python
 # 设置数据集下载路径为当前文件夹
 current_dir = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() else os.getcwd()
 data_dir = os.path.join(current_dir, "data")
 os.makedirs(data_dir, exist_ok=True)
+# 解释: 这段代码确定了存储下载数据集的目录。
+# 首先获取当前脚本所在的目录 (如果作为脚本运行) 或当前工作目录 (如果在交互式环境运行)。
+# 然后在当前目录下创建一个名为 "data" 的子目录用于存放数据。
+# `os.makedirs(data_dir, exist_ok=True)` 会创建目录，如果目录已存在则不会报错。
 
-# 设置随机种子以便结果可复现
-torch.manual_seed(1234)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"使用设备: {device}")
 print(f"数据集将下载到: {data_dir}")
+# 解释: 检查系统中是否有可用的 NVIDIA GPU (通过 `torch.cuda.is_available()`)。
+# 如果有，则将 `device` 设置为 'cuda'，模型和数据将转移到 GPU 上进行计算，速度更快。
+# 如果没有，则使用 'cpu'。打印出所使用的设备和数据目录。
 
 if torch.cuda.is_available():
     print('CUDA版本:', torch.version.cuda)
+# 解释: 如果使用了 CUDA，打印出 PyTorch 编译时使用的 CUDA 版本。
 ```
 
-*   `current_dir` 和 `data_dir`: 确定脚本所在的目录，并在该目录下创建一个名为 `data` 的子目录，用于存放下载的数据集。`os.makedirs(data_dir, exist_ok=True)` 确保目录存在，如果已存在则不报错。
-*   `torch.manual_seed(1234)`: 设置 PyTorch 的随机种子。这使得代码每次运行时，随机数生成器的行为都是一样的，有助于保证实验结果的可复现性（例如，模型权重的初始值、Dropout 的行为等）。
-*   `device`: 检查是否有可用的 CUDA GPU。如果有，则将 `device` 设置为 'cuda'，否则设置为 'cpu'。后续的张量和模型都会被移动到这个设备上进行计算。
-*   打印信息: 输出当前使用的设备（CPU 或 GPU）以及数据集的存储路径。如果使用 GPU，还会打印 CUDA 版本。
-
----
-
-### 3. 数据处理 (Data Processing)
-
-这部分包含多个函数，用于下载、解压、清洗和准备 IMDB 数据集。
+**2. 数据下载与解压 (`download_and_extract_imdb`)**
 
 ```python
 # 手动下载并处理IMDB数据集
 def download_and_extract_imdb():
-    # ... (代码省略)
+    url = "https://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz" # 数据集下载地址
+    dataset_path = os.path.join(data_dir, "aclImdb_v1.tar.gz") # 本地保存压缩文件的路径
+    extracted_path = os.path.join(data_dir, "aclImdb") # 解压后数据的根目录
+
+    # 检查解压后的目录是否存在
+    if not os.path.exists(extracted_path):
+        # 如果解压目录不存在，再检查压缩文件是否存在
+        if not os.path.exists(dataset_path):
+            print(f"下载IMDB数据集到 {dataset_path}...")
+            # 使用 urllib.request 下载文件
+            urllib.request.urlretrieve(url, dataset_path)
+            print("下载完成！")
+
+        print("解压数据集...")
+        # 使用 tarfile 打开 .tar.gz 文件 ('r:gz' 模式)
+        with tarfile.open(dataset_path, 'r:gz') as tar:
+            # 将压缩包内容解压到指定的 data_dir 目录下
+            tar.extractall(path=data_dir)
+        print("解压完成！")
+    else:
+        # 如果解压目录已存在，说明数据已准备好
+        print("IMDB数据集已存在，跳过下载和解压步骤。")
+
+    # 返回解压后数据的路径
     return extracted_path
 
+# 解释: 这个函数负责准备 IMDB 数据集。
+# 1. 定义了数据集的 URL、本地压缩包路径和解压后的路径。
+# 2. 首先检查解压后的文件夹 (`aclImdb`) 是否存在。如果存在，就跳过下载和解压。
+# 3. 如果解压文件夹不存在，接着检查压缩包 (`aclImdb_v1.tar.gz`) 是否存在。
+# 4. 如果压缩包也不存在，则使用 `urllib.request.urlretrieve` 从指定的 URL 下载文件到 `dataset_path`。
+# 5. 下载完成后（或压缩包原本就存在），使用 `tarfile` 库打开并解压 `.tar.gz` 文件到 `data_dir`。解压后会生成 `aclImdb` 文件夹。
+# 6. 最后返回解压后数据的路径 `extracted_path`。
+```
+
+**3. 数据预处理 (`clean_text`, `basic_english_tokenizer`)**
+
+```python
 # 简单的分词器
 def basic_english_tokenizer(text):
-    # ... (代码省略)
+    # 简易版的basic_english tokenizer
+    text = text.lower() # 转换为小写
+    # 将非字母、非数字、非空白符的字符替换为空格
+    text = re.sub(r'[^\w\s]', ' ', text)
+    # 将连续的多个空格合并为一个空格
+    text = re.sub(r'\s+', ' ', text)
+    # 去除首尾空格，并按空格分割成单词列表
     return text.strip().split()
 
 def clean_text(text):
-    # ... (代码省略)
+    text = text.lower() # 转换为小写
+    text = re.sub(r'<br />', ' ', text) # 移除 HTML 换行符 <br />
+    # 将非字母、非数字、非空白符的字符替换为空格 (移除非单词字符)
+    text = re.sub(r'[^\w\s]', ' ', text)
+    # 将连续的多个空格合并为一个空格
+    text = re.sub(r'\s+', ' ', text)
+    # 去除首尾多余空格
     return text.strip()
 
-# 加载IMDB数据集（不使用torchtext）
-def load_imdb_data_manually():
-    # ... (代码省略)
-    return train_dataset, test_dataset, vocab
+# 解释: 这两个函数用于文本的初步清洗和分词。
+# `clean_text(text)`:
+#   - 将文本全部转为小写，以保证大小写不敏感（例如 "Good" 和 "good" 被视为同一个词）。
+#   - 使用正则表达式 `re.sub` 移除 IMDB 数据中常见的 HTML 换行标签 `<br />`，替换为空格。
+#   - 使用 `[^\w\s]` 匹配所有不是字母、数字或空白字符的字符（即标点符号等），并将它们替换为空格。
+#   - 使用 `\s+` 匹配一个或多个连续的空白字符，并将它们合并成一个空格。
+#   - `strip()` 移除文本开头和结尾可能存在的空格。
+# `basic_english_tokenizer(text)`:
+#   - 首先进行与 `clean_text` 类似的清洗操作（小写、去标点、合并空格）。
+#   - 最后使用 `text.strip().split()` 将清洗后的字符串按空格分割，得到一个单词（token）列表。这是一个非常基础的分词器。
 ```
 
-*   **`download_and_extract_imdb()`**:
-    *   定义 IMDB 数据集的下载 URL 和本地存储路径。
-    *   检查数据集是否已解压。如果未解压，则检查压缩包是否存在。
-    *   如果压缩包不存在，使用 `urllib.request.urlretrieve` 下载。
-    *   下载完成后，使用 `tarfile` 解压 `.tar.gz` 文件到 `data_dir`。
-    *   返回解压后的数据集根目录路径 (`aclImdb`)。
-*   **`clean_text(text)`**:
-    *   将文本转换为小写 (`text.lower()`)。
-    *   移除 HTML 换行符 `<br />` (`re.sub(r'<br />', ' ', text)`)。
-    *   移除除字母、数字和空格外的所有标点符号 (`re.sub(r'[^\w\s]', ' ', text)`)。
-    *   将多个连续空格合并为一个 (`re.sub(r'\s+', ' ', text)`)。
-    *   移除首尾多余的空格 (`text.strip()`)。
-    *   返回清洗后的文本。
-*   **`basic_english_tokenizer(text)`**:
-    *   这是一个简化的英文分词器。
-    *   它先将文本转为小写，移除标点符号（替换为空格），合并多余空格，最后按空格分割文本，返回一个包含单词（tokens）的列表。
-*   **`load_imdb_data_manually()`**:
-    *   调用 `download_and_extract_imdb()` 获取数据集路径。
-    *   定义使用的分词器 (`tokenizer = basic_english_tokenizer`)。
-    *   **加载数据**: 遍历 `aclImdb/train/pos`、`aclImdb/train/neg`、`aclImdb/test/pos`、`aclImdb/test/neg` 目录下的 `.txt` 文件。
-    *   对每个文件：读取内容，调用 `clean_text()` 清洗，将清洗后的文本和对应的标签（正面评价为 1，负面为 0）分别存入 `train_texts`/`test_texts` 和 `train_labels`/`test_labels` 列表。使用 `tqdm` 显示加载进度。
-    *   **构建词汇表 (Vocabulary)**:
-        *   使用 `collections.Counter` 统计训练集 (`train_texts`) 中所有单词的出现频率。
-        *   创建一个 `vocab` 字典。首先添加特殊标记：`<pad>` (填充标记，索引为 0) 和 `<unk>` (未知词标记，索引为 1)。
-        *   遍历 `Counter` 中的词和频率，只将频率大于等于 5 的词加入 `vocab`，并分配递增的索引。频率低的词会被视为 `<unk>`。
-        *   打印词汇表大小。
-    *   **创建数据集对象**: 使用处理好的文本、标签、词汇表和分词器，创建 `IMDBDataset` 类的实例 (`train_dataset`, `test_dataset`)。
-    *   返回训练数据集、测试数据集和词汇表。
-
----
-
-### 4. 数据集类 (Dataset Class)
+**4. 数据集类 (`IMDBDataset`)**
 
 ```python
-class IMDBDataset(Dataset):
+# 数据预处理和加载
+class IMDBDataset(Dataset): # 继承自 torch.utils.data.Dataset
     def __init__(self, texts, labels, vocab, tokenizer, max_len=512):
-        # ... (代码省略)
+        self.texts = texts         # 存储所有文本评论的列表
+        self.labels = labels       # 存储所有对应标签的列表 (0或1)
+        self.vocab = vocab         # 存储词汇表 (一个字典，word -> index)
+        self.tokenizer = tokenizer # 存储使用的分词器函数
+        self.max_len = max_len     # 限制序列的最大长度
 
     def __len__(self):
-        # ... (代码省略)
+        # 返回数据集中样本的总数
+        return len(self.texts)
 
     def __getitem__(self, idx):
-        # ... (代码省略)
+        # 根据索引 idx 获取单个样本
+        text = self.texts[idx]    # 获取第 idx 条文本
+        label = self.labels[idx]  # 获取第 idx 个标签
+
+        # 使用分词器将文本转换为 token 列表
+        tokens = self.tokenizer(text)
+
+        # 如果 token 数量超过最大长度，则截断
+        if len(tokens) > self.max_len:
+            tokens = tokens[:self.max_len]
+
+        # 将 token 转换为词汇表中的索引
+        # 使用 vocab.get(token, self.vocab['<unk>'])
+        # 如果 token 在词汇表中，则返回其索引
+        # 如果不在 (称为 OOV, Out-Of-Vocabulary)，则返回特殊标记 '<unk>' (unknown) 的索引
+        token_ids = [self.vocab.get(token, self.vocab['<unk>']) for token in tokens]
+
+        # 返回一个字典，包含处理后的数据
         return {
+            # 将 token 索引列表转换为 PyTorch 张量 (LongTensor)
             'text': torch.tensor(token_ids, dtype=torch.long),
+            # 存储原始 token 数量 (截断后的长度)
             'length': len(token_ids),
+            # 将标签转换为 PyTorch 张量 (LongTensor)
             'label': torch.tensor(label, dtype=torch.long)
         }
+
+# 解释: 这个类是 PyTorch 中用于处理数据集的标准方式。
+# - 它继承自 `torch.utils.data.Dataset`，必须实现 `__len__` 和 `__getitem__` 两个方法。
+# - `__init__`: 构造函数，接收文本列表、标签列表、构建好的词汇表、分词器函数和最大序列长度作为参数，并将它们存储为类的属性。
+# - `__len__`: 返回数据集中样本的总数，DataLoader 需要这个信息。
+# - `__getitem__(idx)`: 定义了如何获取和处理索引为 `idx` 的单个数据样本。
+#   1. 获取原始文本和标签。
+#   2. 调用 `tokenizer` 对文本进行分词。
+#   3. 对分词后的 `tokens` 进行长度截断，确保不超过 `max_len`。
+#   4. **核心步骤**: 遍历 `tokens`，在 `vocab` 字典中查找每个 token 对应的索引。如果 token 不在词汇表中（即训练时未见过或频率过低被过滤掉的词），则使用预定义的 `<unk>`（未知词）标记的索引。这步将文本序列转换成了模型可以理解的数字序列（索引）。
+#   5. 将处理后的 `token_ids`（整数列表）和 `label`（整数）转换为 PyTorch 张量 `torch.tensor`。`dtype=torch.long` 是因为 Embedding 层的输入和损失函数的标签输入通常要求是长整型。
+#   6. 返回一个包含 `text`（token 索引张量）、`length`（序列实际长度）和 `label`（标签张量）的字典。DataLoader 会将这些字典收集起来组成一个批次。
 ```
 
-*   继承自 `torch.utils.data.Dataset`，这是 PyTorch 中自定义数据集的标准方式。
-*   **`__init__(...)`**: 构造函数，接收文本列表、标签列表、词汇表、分词器和最大序列长度 (`max_len`) 作为输入，并将它们存储为类的属性。
-*   **`__len__(self)`**: 返回数据集中样本的总数。`DataLoader` 会使用这个方法来确定数据集的大小。
-*   **`__getitem__(self, idx)`**: 根据索引 `idx` 获取单个数据样本。
-    *   获取对应索引的文本 (`text`) 和标签 (`label`)。
-    *   使用 `self.tokenizer` 将文本分词。
-    *   如果分词后的 token 数量超过 `max_len`，则截断，只保留前 `max_len` 个 token。
-    *   **文本转索引**: 遍历 tokens，使用 `self.vocab.get(token, self.vocab['<unk>'])` 将每个 token 转换为其在词汇表中的索引。如果 token 不在词汇表中，则使用 `<unk>` 的索引。
-    *   将 token 索引列表 (`token_ids`) 和标签 (`label`) 转换为 PyTorch 张量 (`torch.tensor`)。标签类型为 `torch.long`，因为后续的损失函数（如 `CrossEntropyLoss`）需要长整型标签。
-    *   返回一个字典，包含处理后的文本张量 (`'text'`)、原始文本长度 (`'length'`) 和标签张量 (`'label'`)。
+**5. 手动加载 IMDB 数据 (`load_imdb_data_manually`)**
 
----
+```python
+# 加载IMDB数据集（不使用torchtext）
+def load_imdb_data_manually():
+    # 1. 下载并解压数据集
+    dataset_dir = download_and_extract_imdb() # 获取解压后的数据路径
 
-### 5. 模型定义 (Model Definition)
+    tokenizer = basic_english_tokenizer # 指定使用的分词器
 
-这部分定义了 Transformer 模型的核心组件和最终的分类器。
+    # 2. 加载训练数据
+    print("加载训练数据...")
+    train_texts, train_labels = [], [] # 初始化列表存储训练文本和标签
+
+    # 加载正面评价 (positive, label=1)
+    pos_dir = os.path.join(dataset_dir, "train", "pos") # 正面训练评论目录
+    # 使用 tqdm 显示加载进度
+    for filename in tqdm(os.listdir(pos_dir), desc="加载正面训练评价"):
+        if filename.endswith('.txt'): # 确保只读取 .txt 文件
+            with open(os.path.join(pos_dir, filename), 'r', encoding='utf-8') as f:
+                text = f.read() # 读取文件内容
+            train_texts.append(clean_text(text)) # 清洗文本后添加到列表
+            train_labels.append(1) # 添加标签 1
+
+    # 加载负面评价 (negative, label=0)
+    neg_dir = os.path.join(dataset_dir, "train", "neg") # 负面训练评论目录
+    for filename in tqdm(os.listdir(neg_dir), desc="加载负面训练评价"):
+        if filename.endswith('.txt'):
+            with open(os.path.join(neg_dir, filename), 'r', encoding='utf-8') as f:
+                text = f.read()
+            train_texts.append(clean_text(text)) # 清洗文本
+            train_labels.append(0) # 添加标签 0
+
+    # 3. 加载测试数据 (过程与加载训练数据类似)
+    print("加载测试数据...")
+    test_texts, test_labels = [], []
+
+    # 加载正面测试评价
+    pos_dir = os.path.join(dataset_dir, "test", "pos")
+    for filename in tqdm(os.listdir(pos_dir), desc="加载正面测试评价"):
+        if filename.endswith('.txt'):
+            with open(os.path.join(pos_dir, filename), 'r', encoding='utf-8') as f:
+                text = f.read()
+            test_texts.append(clean_text(text))
+            test_labels.append(1)
+
+    # 加载负面测试评价
+    neg_dir = os.path.join(dataset_dir, "test", "neg")
+    for filename in tqdm(os.listdir(neg_dir), desc="加载负面测试评价"):
+        if filename.endswith('.txt'):
+            with open(os.path.join(neg_dir, filename), 'r', encoding='utf-8') as f:
+                text = f.read()
+            test_texts.append(clean_text(text))
+            test_labels.append(0)
+
+    # 4. 创建词汇表 (Vocabulary)
+    print("构建词汇表...")
+    counter = Counter() # 使用 Counter 对象统计词频
+    # 遍历所有训练文本
+    for text in tqdm(train_texts, desc="统计词频"):
+        # 使用分词器分词，并更新 Counter 中的词频
+        counter.update(tokenizer(text))
+
+    # 初始化词汇表，包含两个特殊 token:
+    # '<pad>': 用于填充 (padding) 较短序列，使其与批次中最长序列等长。通常索引为 0。
+    # '<unk>': 用于表示未在词汇表中出现的词 (Unknown)。通常索引为 1。
+    vocab = {'<pad>': 0, '<unk>': 1}
+    idx = 2 # 从索引 2 开始分配给其他词
+    # 遍历统计好的词频 (counter.items() 返回 (word, count) 对)
+    for word, count in counter.items():
+        # 只将词频大于等于 5 的词加入词汇表
+        # 这是一种常见的过滤低频词的方法，可以减小词汇表大小，去除噪音。
+        if count >= 5:
+            vocab[word] = idx
+            idx += 1
+
+    print(f"词汇表大小: {len(vocab)}") # 打印最终词汇表包含的词数量
+
+    # 5. 打乱数据集顺序
+    # 将文本和标签打包成 (text, label) 对
+    combined = list(zip(train_texts, train_labels))
+    random.shuffle(combined) # 使用 random.shuffle 原地打乱列表顺序
+    # 解包，得到打乱后的文本和标签列表
+    train_texts, train_labels = zip(*combined)
+
+    combined = list(zip(test_texts, test_labels))
+    random.shuffle(combined)
+    test_texts, test_labels = zip(*combined)
+    # 解释: 打乱数据顺序对于训练很重要，可以防止模型学到数据原始顺序带来的偏差，
+    # 使每个批次的数据更具代表性。训练集和测试集都需要打乱。
+
+    # 6. 创建数据集对象
+    # 使用前面定义的 IMDBDataset 类创建训练集和测试集实例
+    train_dataset = IMDBDataset(train_texts, train_labels, vocab, tokenizer)
+    test_dataset = IMDBDataset(test_texts, test_labels, vocab, tokenizer)
+
+    # 返回创建好的数据集对象和词汇表
+    return train_dataset, test_dataset, vocab
+
+# 解释: 这个函数是数据准备的核心环节，它不依赖像 `torchtext` 这样的库，而是手动完成了所有步骤：
+# - 下载解压数据。
+# - 逐个读取训练和测试文件，进行文本清洗 (`clean_text`)，并存储文本和对应标签。
+# - **构建词汇表**: 这是关键一步。它统计了训练集中所有单词的出现频率，并只保留了出现次数达到一定阈值（这里是 5 次）的单词。同时，加入了 `<pad>` 和 `<unk>` 两个特殊符号。这个词汇表 `vocab` 是一个字典，将单词映射到唯一的整数索引。
+# - 打乱数据，确保训练的随机性。
+# - 使用 `IMDBDataset` 类将处理好的文本列表、标签列表、词汇表和分词器封装成 PyTorch 的 Dataset 对象，方便后续 DataLoader 使用。
+```
+
+**6. Transformer 编码器层 (`TransformerEncoderLayer`)**
 
 ```python
 # 定义Transformer编码器层
 class TransformerEncoderLayer(nn.Module):
     def __init__(self, embed_dim, num_heads, ff_dim, dropout=0.1):
-        # ... (代码省略)
+        # embed_dim: 输入/输出的特征维度 (词嵌入维度)
+        # num_heads: 多头注意力机制中的头数
+        # ff_dim: 前馈网络中间层的维度
+        # dropout: Dropout 比率
+        super(TransformerEncoderLayer, self).__init__()
+
+        # 1. 多头自注意力 (Multi-Head Self-Attention)
+        self.self_attn = nn.MultiheadAttention(
+            embed_dim,      # 嵌入维度
+            num_heads,      # 注意力头数
+            dropout=dropout # 注意力权重上的 dropout
+            # batch_first=False (默认) - 输入形状预期为 (SeqLen, Batch, EmbedDim)
+        )
+
+        # 2. 前馈网络 (Feed Forward Network)
+        self.feed_forward = nn.Sequential(
+            nn.Linear(embed_dim, ff_dim), # 线性层 1: 从 embed_dim 扩展到 ff_dim
+            nn.ReLU(),                    # ReLU 激活函数
+            nn.Dropout(dropout),          # Dropout
+            nn.Linear(ff_dim, embed_dim)  # 线性层 2: 从 ff_dim 压缩回 embed_dim
+        )
+
+        # 3. 层归一化 (Layer Normalization)
+        self.norm1 = nn.LayerNorm(embed_dim) # 应用在自注意力之后
+        self.norm2 = nn.LayerNorm(embed_dim) # 应用在前馈网络之后
+
+        # 4. Dropout
+        self.dropout = nn.Dropout(dropout) # 应用在残差连接中
 
     def forward(self, x, mask=None):
-        # ... (代码省略)
-        return x
+        # x: 输入序列, 形状预期为 (SeqLen, Batch, EmbedDim)
+        # mask: Padding mask, 形状预期为 (Batch, SeqLen), True 表示是 padding 位置
 
+        # --- 子层 1: 多头自注意力 + 残差连接 + 层归一化 ---
+        # 计算多头自注意力
+        # query, key, value 都来自输入 x
+        # key_padding_mask=mask 告诉注意力机制忽略 mask 中为 True 的位置 (padding)
+        attn_output, _ = self.self_attn(x, x, x, key_padding_mask=mask)
+        # 残差连接 (Add): 将注意力输出加到原始输入 x 上
+        # Dropout 应用于注意力输出
+        x = x + self.dropout(attn_output)
+        # 层归一化 (Norm)
+        x = self.norm1(x)
+
+        # --- 子层 2: 前馈网络 + 残差连接 + 层归一化 ---
+        # 通过前馈网络
+        ff_output = self.feed_forward(x)
+        # 残差连接 (Add): 将前馈网络输出加到上一层的结果 x 上
+        # Dropout 应用于前馈网络输出
+        x = x + self.dropout(ff_output)
+        # 层归一化 (Norm)
+        x = self.norm2(x)
+
+        return x # 返回编码器层的输出, 形状仍为 (SeqLen, Batch, EmbedDim)
+
+# 解释: 这是构成 Transformer Encoder 的基本单元。一个 Encoder Layer 包含两个主要的子层：
+# 1.  **多头自注意力 (Multi-Head Self-Attention)**:
+#     -   允许模型在处理序列中的每个词时，同时关注序列中的其他所有词，并计算它们之间的相关性（注意力权重）。
+#     -   "多头"表示这种注意力计算过程并行地进行多次（`num_heads`次），每个头学习不同的关注模式，然后将结果合并，增强了模型的表达能力。
+#     -   `self.self_attn(x, x, x, key_padding_mask=mask)`: 输入 `x` 同时作为查询 (Query)、键 (Key) 和值 (Value) 进行自注意力计算。`key_padding_mask` 用于确保模型不会关注到输入序列中的填充部分（`<pad>` token）。
+# 2.  **前馈网络 (Feed Forward Network)**:
+#     -   这是一个简单的全连接神经网络，独立地应用于序列中的每个位置（每个词的表示向量）。
+#     -   通常由两个线性层和一个非线性激活函数（如 ReLU）组成。`nn.Sequential` 将这些层按顺序组合起来。
+#     -   它对自注意力层的输出进行进一步的非线性变换，增加模型的拟合能力。
+
+# 每个子层的输出都经过了 **残差连接 (Residual Connection)** 和 **层归一化 (Layer Normalization)**：
+# -   **残差连接**: 将子层的输入 `x` 直接加到子层的输出上 (`x = x + sublayer(x)`)。这有助于缓解深度网络中的梯度消失问题，使得模型更容易训练。
+# -   **层归一化**: 对每个样本的特征进行归一化，稳定训练过程，加速收敛。它与批归一化 (Batch Normalization) 不同，是在特征维度上进行归一化，而不是在批次维度上。
+# -   **Dropout**: 在自注意力和前馈网络的输出以及残差连接中加入 Dropout，随机将一部分神经元的输出置零，是一种有效的正则化手段，防止模型过拟合。
+
+# `forward` 方法清晰地展示了数据的流动过程：输入 `x` -> 自注意力 -> Add & Norm -> 前馈网络 -> Add & Norm -> 输出。
+# 注意 PyTorch 的 `nn.MultiheadAttention` 默认期望输入形状是 `(SeqLen, Batch, EmbedDim)`，这与常见的 `(Batch, SeqLen, EmbedDim)` 不同，需要在模型主体中进行转换。
+```
+
+**7. Transformer 分类器模型 (`TransformerClassifier`)**
+
+```python
 # 定义Transformer分类器
 class TransformerClassifier(nn.Module):
     def __init__(self, vocab_size, embed_dim, num_heads, num_layers, ff_dim, num_classes, max_len=512, dropout=0.1):
-        # ... (代码省略)
+        # vocab_size: 词汇表大小 (用于 Embedding 层)
+        # embed_dim: 词嵌入和模型内部的特征维度
+        # num_heads: 每个 Transformer 层中的注意力头数
+        # num_layers: Transformer 编码器层的数量 (深度)
+        # ff_dim: Transformer 层中前馈网络的中间维度
+        # num_classes: 输出类别的数量 (情感分类是 2 类)
+        # max_len: 输入序列的最大长度 (用于位置编码)
+        # dropout: Dropout 比率
+        super(TransformerClassifier, self).__init__()
 
-    def forward(self, x, lengths):
-        # ... (代码省略)
-        return logits
+        # 1. 词嵌入层 (Token Embedding)
+        self.token_embedding = nn.Embedding(vocab_size, embed_dim, padding_idx=0)
+        # - vocab_size: 词汇表的大小，决定了嵌入矩阵的第一维。
+        # - embed_dim: 每个词向量的维度。
+        # - padding_idx=0: 指定索引为 0 的 token (<pad>) 的嵌入向量在训练中不会被更新，并且其梯度始终为零。
 
-def create_padding_mask(batch):
-    # ... (代码省略)
+        # 2. 位置编码 (Positional Embedding)
+        # 使用可学习的位置编码 (Learned Positional Embedding)
+        self.position_embedding = nn.Parameter(torch.zeros(max_len, embed_dim))
+        # - 创建一个形状为 (max_len, embed_dim) 的参数张量，初始化为全零。
+        # - nn.Parameter 表明这是一个模型的可学习参数，会在训练过程中被优化器更新。
+        # - 模型将学习到每个位置的最佳表示。
+
+        # 3. Transformer 编码器层堆叠
+        self.transformer_layers = nn.ModuleList([
+            TransformerEncoderLayer(embed_dim, num_heads, ff_dim, dropout)
+            for _ in range(num_layers) # 创建 num_layers 个独立的 TransformerEncoderLayer 实例
+        ])
+        # - nn.ModuleList 是一个列表，可以像普通 Python 列表一样索引，但它能正确地注册其中包含的模块，
+        #   确保这些子模块的参数能被 PyTorch 的优化器识别和更新。
+
+        # 4. 分类器头部 (Classifier Head)
+        self.classifier = nn.Linear(embed_dim, num_classes)
+        # - 一个简单的线性层，将 Transformer 最后一层的输出特征 (经过池化后) 映射到最终的类别分数 (logits)。
+        # - 输入维度是 embed_dim (与 Transformer 输出维度一致)。
+        # - 输出维度是 num_classes (类别数)。
+
+        # 5. Dropout 层 (用于分类器之前)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x, lengths): # lengths 参数在这里没有直接使用，但可以用于更复杂的池化或处理
+        # x: 输入的 token 索引序列, 形状为 (Batch, SeqLen)
+
+        # 创建 Padding Mask
+        # mask 的形状为 (Batch, SeqLen)，在 padding 位置 (索引为 0) 为 True
+        mask = create_padding_mask(x)
+
+        # 1. 获取词嵌入
+        # x 形状: (Batch, SeqLen) -> (Batch, SeqLen, EmbedDim)
+        x = self.token_embedding(x)
+
+        # 2. 添加位置编码
+        batch_size, seq_len = x.size(0), x.size(1)
+        # position_embedding 形状: (max_len, embed_dim)
+        # 取前 seq_len 行: (seq_len, embed_dim)
+        # 使用广播机制加到 x 上:
+        # x (Batch, SeqLen, EmbedDim) + pos_embed (SeqLen, EmbedDim) -> (Batch, SeqLen, EmbedDim)
+        x = x + self.position_embedding[:seq_len, :]
+
+        # 3. 调整维度以适配 PyTorch Transformer 层
+        # (Batch, SeqLen, EmbedDim) -> (SeqLen, Batch, EmbedDim)
+        x = x.transpose(0, 1)
+
+        # 4. 通过 Transformer 编码器层
+        # 逐层传递数据，每一层的输出作为下一层的输入
+        # mask (Batch, SeqLen) 会被传递给每个 MultiheadAttention 层的 key_padding_mask 参数
+        for layer in self.transformer_layers:
+            x = layer(x, mask)
+
+        # 5. 调整维度回原始格式
+        # (SeqLen, Batch, EmbedDim) -> (Batch, SeqLen, EmbedDim)
+        x = x.transpose(0, 1)
+
+        # 6. 平均池化 (Mean Pooling over non-padding tokens)
+        # mask 形状: (Batch, SeqLen)
+        # mask.float() -> (Batch, SeqLen), True 变 1.0, False 变 0.0
+        # mask.unsqueeze(-1) -> (Batch, SeqLen, 1)
+        # 1 - mask -> 反转 mask，有效位置为 1，padding 位置为 0
+        pool_mask = (1.0 - mask.float()).unsqueeze(-1)
+        # (x * pool_mask): 将 padding 位置的向量置零
+        # .sum(dim=1): 沿着序列长度维度求和, 得到 (Batch, EmbedDim)
+        # pool_mask.sum(dim=1): 计算每个序列的有效长度 (排除 padding), 得到 (Batch, 1)
+        # .clamp(min=1e-9): 防止除以零
+        # 最终得到每个序列的平均向量表示 (Batch, EmbedDim)
+        x = (x * pool_mask).sum(dim=1) / pool_mask.sum(dim=1).clamp(min=1e-9)
+        # 解释: 这里没有使用像 BERT 那样取 [CLS] token 的输出，而是计算了序列中所有非 <pad> token 输出向量的平均值。
+        # 这是一种常用的将变长序列的 Transformer 输出转换为固定大小向量的方法，用于下游分类任务。
+
+        # 7. 分类
+        # 应用 Dropout
+        x = self.dropout(x)
+        # 通过最后的线性分类层得到 logits
+        # x 形状: (Batch, EmbedDim) -> (Batch, num_classes)
+        logits = self.classifier(x)
+
+        return logits # 返回每个样本属于各个类别的原始分数 (logits)
+
+# 解释: 这是模型的主体结构。
+# - `__init__`: 初始化了模型的所有组件：词嵌入层、位置编码参数、一个包含多个 `TransformerEncoderLayer` 的列表、最终的线性分类层和 Dropout 层。
+# - `forward(x, lengths)`: 定义了数据在模型中的流动路径：
+#   1.  **输入处理**: 获取词嵌入，并加上可学习的位置编码。位置编码给模型提供了单词在序列中的位置信息，这对于 Transformer 至关重要，因为它本身不像 RNN 那样具有内在的顺序处理机制。
+#   2.  **维度转换**: 将数据维度从 `(Batch, SeqLen, EmbedDim)` 转换成 `(SeqLen, Batch, EmbedDim)` 以符合 PyTorch `nn.MultiheadAttention` 的要求。
+#   3.  **Transformer 编码**: 数据依次通过 `ModuleList` 中的每一个 `TransformerEncoderLayer`。每一层都会对输入序列进行自注意力和前馈网络的处理，逐步提炼序列的表示。Padding Mask 会在每一层的自注意力计算中使用。
+#   4.  **维度转换**: 将输出维度转换回 `(Batch, SeqLen, EmbedDim)`。
+#   5.  **池化**: 使用 Mean Pooling 将 Transformer 最后一层输出的序列表示（每个 token 一个向量）聚合成一个单一的向量，代表整个输入序列的语义信息。这里巧妙地利用了 padding mask 来确保只对有效的 token 进行平均。
+#   6.  **分类**: 将池化得到的序列表示向量通过一个 Dropout 层和最后的线性层，输出每个类别的预测分数（logits）。
 ```
 
-*   **`TransformerEncoderLayer`**: 定义了 Transformer 模型中的一个编码器层。
-    *   **`__init__(...)`**:
-        *   `self_attn`: 定义多头自注意力（Multi-head Self-Attention）层 (`nn.MultiheadAttention`)。它接收嵌入维度 `embed_dim`、注意力头数 `num_heads` 和 dropout 率。`embed_dim` 定义了模型中表示每个单词（token）的基础向量维度，它决定了单词表示的丰富程度和模型的基本“宽度”。`num_heads` 将 `embed_dim` 分割开，允许多个注意力机制并行运行在不同的表示子空间上，使模型能够同时关注输入的不同方面和关系。
-        *   `feed_forward`: 定义前馈神经网络。它由两个线性层 (`nn.Linear`) 和一个 ReLU 激活函数组成，中间也有 Dropout。维度变化是 `embed_dim -> ff_dim -> embed_dim`。
-        *   `norm1`, `norm2`: 定义层归一化（Layer Normalization）层 (`nn.LayerNorm`)。分别用在自注意力和前馈网络之后。
-        *   `dropout`: 定义 Dropout 层 (`nn.Dropout`)。
-    *   **`forward(self, x, mask=None)`**: 定义前向传播逻辑。
-        *   **自注意力**: 输入 `x` 通过多头自注意力层。`mask` 用于指示哪些位置是填充的，注意力机制不应关注这些位置。
-        *   **残差连接与归一化 (Add & Norm)**: 将自注意力层的输出通过 Dropout 后与原始输入 `x` 相加（残差连接），然后进行层归一化 (`self.norm1`)。
-        *   **前馈网络**: 上一步的输出通过前馈网络。
-        *   **残差连接与归一化 (Add & Norm)**: 将前馈网络的输出通过 Dropout 后与前一步的输出相加，然后进行层归一化 (`self.norm2`)。
-        *   返回编码器层的最终输出。
-*   **`TransformerClassifier`**: 定义了整个分类模型。
-    *   **`__init__(...)`**:
-        *   `token_embedding`: 词嵌入层 (`nn.Embedding`)。将输入的 token 索引映射为密集向量。`vocab_size` 是词汇表大小，`embed_dim` 是嵌入向量的维度。
-        *   `position_embedding`: 位置嵌入 (`nn.Parameter`)。这是一个可学习的参数张量，形状为 `(max_len, embed_dim)`。它为序列中的每个位置提供一个独特的嵌入向量，让模型能够理解单词的顺序。
-        *   `transformer_layers`: 使用 `nn.ModuleList` 包含多个 `TransformerEncoderLayer` 实例。`num_layers` 控制编码器的层数。
-        *   `classifier`: 最终的线性分类层。将 Transformer 的输出映射到类别得分。`num_classes` 是分类任务的类别数（这里是 2，正面/负面）。
-        *   `dropout`: Dropout 层，用于分类器之前，防止过拟合。
-    *   **`forward(self, x, lengths)`**: 定义模型的前向传播逻辑。
-        *   `x`: 输入的批次数据，形状为 `[batch_size, seq_len]`，包含 token 索引。
-        *   `lengths`: 包含批次中每个序列的原始长度（未使用，但保留了接口）。
-        *   `mask = create_padding_mask(x)`: 创建填充掩码，标记输入序列中的填充位置（通常是索引为 0 的 `<pad>` token）。
-        *   **嵌入**: 输入 `x` 通过 `token_embedding` 层得到词嵌入。
-        *   **位置编码**: 将词嵌入与 `position_embedding`（取序列长度部分）相加，得到结合了词义和位置信息的嵌入。
-        *   **维度转换**: 使用 `x.transpose(0, 1)` 将形状从 `[batch_size, seq_len, embed_dim]` 转换为 `[seq_len, batch_size, embed_dim]`，以符合 PyTorch `MultiheadAttention` 的输入要求。
-        *   **Transformer 编码**: 数据依次通过 `transformer_layers` 中的每个 `TransformerEncoderLayer`。填充掩码 `mask` 会传递给注意力层。
-        *   **维度转换**: 使用 `x.transpose(0, 1)` 将形状转回 `[batch_size, seq_len, embed_dim]`。
-        *   **池化 (Pooling)**:
-            *   获取反转后的掩码 (`1 - mask`)，其中 1 代表有效位置，0 代表填充位置。
-            *   将 Transformer 最后一层的输出 `x` 与反转掩码相乘（广播机制），使得填充位置的向量变为 0。
-            *   沿着序列长度维度 (`dim=1`) 求和，再除以每个序列的有效长度（`mask.sum(dim=1)`），得到每个序列的平均向量（Mean Pooling）。`.clamp(min=1e-9)` 防止除以零。这是将变长序列表示为固定长度向量的一种常用方法。
-        *   **分类**: 将池化后的向量通过 Dropout 层，然后输入到 `classifier` 线性层，得到每个类别的原始得分（logits）。
-        *   返回 logits。
-*   **`create_padding_mask(batch)`**:
-    *   接收一个批次的 token 索引张量 `batch`。
-    *   通过 `(batch == 0)` 创建一个布尔张量，其中值为 `True` 的位置对应原始张量中值为 0（即 `<pad>` token）的位置。这个掩码用于告知 `MultiheadAttention` 忽略这些填充位置。
+**8. Padding Mask 函数 (`create_padding_mask`)**
 
----
+```python
+def create_padding_mask(batch):
+    """创建用于attention的padding mask"""
+    # batch: 输入的 token 索引序列, 形状为 (Batch, SeqLen)
+    # 假设 padding token 的索引为 0
+    # (batch == 0) 会生成一个布尔张量
+    # 在 token 索引等于 0 的位置为 True, 其他位置为 False
+    # 形状与 batch 相同: (Batch, SeqLen)
+    return (batch == 0)
 
-### 6. 数据加载器 (DataLoader and Collation)
+# 解释: 这个辅助函数非常简单但重要。它接收一个批次的 token 索引张量，并返回一个相同形状的布尔张量。
+# 在 Transformer 的自注意力计算中，我们需要告诉模型哪些是真实的 token，哪些是为了让序列等长而填充的 `<pad>` token（其索引通常设为 0）。
+# 这个函数通过比较输入张量中的每个元素是否等于 0 来生成这个掩码 (mask)。
+# 返回的掩码中，`True` 值对应的位置表示是 padding，在 `nn.MultiheadAttention` 的 `key_padding_mask` 参数中使用时，这些位置的注意力权重会被忽略。
+```
+
+**9. 批处理函数 (`collate_batch`)**
 
 ```python
 # 批处理函数：将不同长度的序列填充到相同长度
 def collate_batch(batch):
-    # ... (代码省略)
+    # batch: 一个列表，包含 N 个由 IMDBDataset.__getitem__ 返回的字典
+    # 每个字典形如 {'text': tensor, 'length': int, 'label': tensor}
+
+    # 提取批次中所有样本的 'text' (token 索引张量)
+    texts = [item['text'] for item in batch]
+    # 提取批次中所有样本的 'label' (标签张量)
+    labels = [item['label'] for item in batch]
+    # 提取批次中所有样本的 'length' (原始长度)
+    lengths = [item['length'] for item in batch]
+
+    # 核心步骤：填充序列 (Padding)
+    # texts 是一个包含不同长度张量的列表
+    # pad_sequence 会将这些张量填充到该批次中最长序列的长度
+    padded_texts = pad_sequence(
+        texts,           # 输入的张量列表
+        batch_first=True,# 输出张量的形状为 (Batch, MaxSeqLen)
+        padding_value=0  # 使用 0 (即 <pad> 的索引) 进行填充
+    )
+
+    # 将标签列表堆叠成一个张量 (Batch,)
+    labels = torch.stack(labels)
+    # 将长度列表转换为张量 (Batch,)
+    lengths = torch.tensor(lengths)
+
+    # 返回一个包含批处理后数据的字典
     return {
-        'texts': padded_texts,
-        'labels': torch.stack(labels),
-        'lengths': torch.tensor(lengths)
+        'texts': padded_texts, # 填充后的文本序列张量
+        'labels': labels,      # 标签张量
+        'lengths': lengths     # 原始长度张量 (虽然模型里没直接用，但保留了信息)
     }
 
-# 在 main 函数中创建 DataLoader
-train_dataloader = DataLoader(...)
-test_dataloader = DataLoader(...)
+# 解释: DataLoader 在组合单个样本形成一个批次 (batch) 时，会调用 `collate_fn` 指定的函数。
+# 由于文本序列通常长度不同，而神经网络（特别是需要矩阵运算的 Transformer）通常要求输入是形状规整的张量，因此需要进行填充 (Padding)。
+# `collate_batch` 函数的作用就是：
+# 1. 从输入的 `batch`（一个包含多个样本字典的列表）中，分别提取出 `texts`（token 索引张量列表）、`labels`（标签张量列表）和 `lengths`（长度列表）。
+# 2. 使用 `torch.nn.utils.rnn.pad_sequence` 函数对 `texts` 列表中的张量进行填充。它会自动找到当前批次中最长的序列长度，并将所有其他序列用指定的 `padding_value`（这里是 0，代表 `<pad>`）填充到这个长度。`batch_first=True` 确保输出的 `padded_texts` 张量形状是 `(BatchSize, MaxSequenceLengthInBatch)`。
+# 3. 使用 `torch.stack` 将 `labels` 列表中的单个标签张量堆叠成一个形状为 `(BatchSize,)` 的张量。
+# 4. 将 `lengths` 列表转换为张量。
+# 5. 返回一个字典，其中包含了处理好的、形状规整的批次数据，可以直接输入到模型中。
 ```
 
-*   **`collate_batch(batch)`**: 这个函数是传递给 `DataLoader` 的 `collate_fn` 参数。`DataLoader` 在组合单个样本 (`__getitem__` 的返回值) 形成一个批次时会调用它。
-    *   接收一个列表 `batch`，其中每个元素都是 `IMDBDataset.__getitem__` 返回的字典。
-    *   从批次中提取所有的文本 (`texts`)、标签 (`labels`) 和长度 (`lengths`)。
-    *   **填充 (Padding)**: 使用 `pad_sequence(texts, batch_first=True, padding_value=0)`。
-        *   `texts` 是一个包含不同长度张量的列表。
-        *   `pad_sequence` 会自动计算批次中最长序列的长度。
-        *   将所有短于最长序列的张量用 `padding_value=0` (即 `<pad>` token 的索引) 填充到相同的长度。
-        *   `batch_first=True` 表示返回的张量形状为 `[batch_size, max_seq_len]`。
-    *   使用 `torch.stack(labels)` 将标签列表堆叠成一个张量。
-    *   将长度列表转换为张量。
-    *   返回一个包含填充后的文本批次、标签批次和长度批次的字典。
-*   **`DataLoader(...)`**:
-    *   创建数据加载器实例。
-    *   `train_subset`/`test_subset`: 要加载的数据集。
-    *   `batch_size=32`: 每个批次包含 32 个样本。
-    *   `shuffle=True` (用于训练集): 在每个 epoch 开始时打乱数据顺序，有助于模型训练。
-    *   `shuffle=False` (用于测试集): 不需要打乱。
-    *   `collate_fn=collate_batch`: 指定使用我们定义的 `collate_batch` 函数来组合样本并进行填充。
-
----
-
-### 7. 训练函数 (Training Function)
+**10. 训练函数 (`train`)**
 
 ```python
+# 训练函数
 def train(model, dataloader, optimizer, criterion, device):
-    model.train() # 设置模型为训练模式（启用 Dropout 等）
-    total_loss = 0
-    progress_bar = tqdm(dataloader, desc='训练') # 使用 tqdm 显示进度条
+    # model: 要训练的模型
+    # dataloader: 提供训练数据的 DataLoader
+    # optimizer: 优化器 (如 Adam)
+    # criterion: 损失函数 (如 CrossEntropyLoss)
+    # device: 计算设备 (CPU 或 CUDA)
 
+    model.train() # 将模型设置为训练模式
+    # 这会启用 Dropout、Batch Normalization 等在训练时需要开启的层
+
+    total_loss = 0 # 累积一个 epoch 内的总损失
+    all_preds = [] # 存储一个 epoch 内所有的预测结果
+    all_labels = [] # 存储一个 epoch 内所有的真实标签
+
+    # 使用 tqdm 包装 dataloader 以显示进度条
+    progress_bar = tqdm(dataloader, desc='训练')
+
+    # 迭代 DataLoader 提供的每个批次
     for batch in progress_bar:
-        # 数据移动到指定设备 (CPU/GPU)
-        texts = batch['texts'].to(device)
-        labels = batch['labels'].to(device)
-        lengths = batch['lengths'].to(device) # lengths 实际未使用，但保持接口一致
+        # 从批次字典中获取数据，并移动到指定设备
+        texts = batch['texts'].to(device)   # (Batch, SeqLen)
+        labels = batch['labels'].to(device) # (Batch,)
+        lengths = batch['lengths'].to(device) # (Batch,) - 在这个模型中没直接用
 
-        optimizer.zero_grad() # 清除上一轮的梯度
+        # 1. 清空梯度
+        # 在计算新的梯度之前，必须清除上一步累积的梯度
+        optimizer.zero_grad()
 
-        # 前向传播：获取模型输出 (logits)
-        outputs = model(texts, lengths)
+        # 2. 前向传播
+        # 将输入数据传入模型，得到模型的输出 (logits)
+        outputs = model(texts, lengths) # outputs 形状: (Batch, num_classes)
 
-        # 计算损失
+        # 3. 计算损失
+        # 使用损失函数计算模型输出和真实标签之间的差距
         loss = criterion(outputs, labels)
 
-        # 反向传播：计算梯度
+        # 4. 反向传播
+        # 计算损失相对于模型所有可训练参数的梯度
         loss.backward()
 
-        # 更新模型参数
+        # 5. 梯度裁剪 (可选但推荐)
+        # 防止梯度爆炸问题，将梯度的范数限制在最大值 1.0 以内
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
+        # 6. 更新参数
+        # 优化器根据计算出的梯度更新模型的参数
         optimizer.step()
 
-        total_loss += loss.item() # 累加损失值 (.item() 获取标量值)
-        # 更新进度条后缀，显示当前批次的损失
+        # --- 记录损失和准确率计算所需数据 ---
+        # 从模型输出 (logits) 中获取预测类别
+        # torch.max 返回 (values, indices)，我们取 indices (预测的类别索引)
+        _, preds = torch.max(outputs, 1)
+        # 将当前批次的预测和标签从 GPU 移到 CPU (.cpu()) 并转为 NumPy 数组 (.numpy())
+        # 然后添加到列表中
+        all_preds.extend(preds.cpu().numpy())
+        all_labels.extend(labels.cpu().numpy())
+
+        # 累加当前批次的损失值
+        total_loss += loss.item() # .item() 获取纯数值，避免累积计算图
+
+        # 更新 tqdm 进度条的后缀信息，显示当前批次的损失
         progress_bar.set_postfix({'loss': f'{loss.item():.4f}'})
 
-    # 返回平均训练损失
+    # --- Epoch 结束后的处理 ---
+    # 计算整个 epoch 的训练准确率
+    train_acc = accuracy_score(all_labels, all_preds)
+    print(f"训练准确率: {train_acc:.4f}")
+    # 打印预测类别的分布，有助于发现模型是否倾向于预测某个特定类别
+    print(f"训练预测分布: {Counter(all_preds)}")
+
+    # 返回该 epoch 的平均训练损失
     return total_loss / len(dataloader)
+
+# 解释: 这个函数封装了标准的 PyTorch 训练循环的一个完整 epoch。
+# 1.  `model.train()`: 将模型切换到训练模式。
+# 2.  初始化损失累加器和用于计算准确率的列表。
+# 3.  迭代 `dataloader` 获取每个批次的数据。
+# 4.  **核心训练步骤 (对于每个批次)**:
+#     *   数据移动到 `device`。
+#     *   `optimizer.zero_grad()`: 清除旧梯度。
+#     *   `outputs = model(...)`: 前向传播，获得模型预测。
+#     *   `loss = criterion(...)`: 计算损失。
+#     *   `loss.backward()`: 反向传播，计算梯度。
+#     *   `clip_grad_norm_`: (可选) 梯度裁剪，稳定训练。
+#     *   `optimizer.step()`: 根据梯度更新模型权重。
+# 5.  记录当前批次的损失和预测/标签，用于后续计算平均损失和准确率。
+# 6.  Epoch 结束后，计算并打印整个 epoch 的训练准确率和预测分布。
+# 7.  返回平均训练损失。
 ```
 
-*   设置模型为训练模式 (`model.train()`)。这会启用 Dropout 和 Batch Normalization（如果模型中有的话）的训练行为。
-*   初始化 `total_loss`。
-*   使用 `tqdm` 包装 `dataloader` 以显示训练进度。
-*   **遍历批次**:
-    *   从 `dataloader` 获取一个批次的数据。
-    *   将数据（文本、标签）移动到 `device` (GPU 或 CPU)。
-    *   **梯度清零**: `optimizer.zero_grad()` 清除之前计算的梯度，防止梯度累积。
-    *   **前向传播**: `outputs = model(texts, lengths)` 将输入数据传入模型，得到预测结果 (logits)。
-    *   **计算损失**: `loss = criterion(outputs, labels)` 使用定义的损失函数（如交叉熵损失 `nn.CrossEntropyLoss`）计算预测结果 `outputs` 和真实标签 `labels` 之间的损失。
-    *   **反向传播**: `loss.backward()` 根据损失值自动计算模型中所有可训练参数的梯度。
-    *   **参数更新**: `optimizer.step()` 使用优化器（如 Adam）根据计算出的梯度更新模型的权重。
-    *   累加当前批次的损失值。
-    *   更新 `tqdm` 进度条，显示当前批次的损失。
-*   循环结束后，返回整个 epoch 的平均训练损失。
-
----
-
-### 8. 评估函数 (Evaluation Function)
+**11. 评估函数 (`evaluate`)**
 
 ```python
+# 评估函数
 def evaluate(model, dataloader, criterion, device):
-    model.eval() # 设置模型为评估模式（禁用 Dropout 等）
-    total_loss = 0
-    all_preds = [] # 存储所有预测结果
-    all_labels = [] # 存储所有真实标签
+    # model: 要评估的模型
+    # dataloader: 提供评估数据的 DataLoader (通常是验证集或测试集)
+    # criterion: 损失函数 (用于计算评估损失)
+    # device: 计算设备
 
+    model.eval() # 将模型设置为评估模式
+    # 这会关闭 Dropout、Batch Normalization 的更新等，确保评估结果的一致性。
+
+    total_loss = 0 # 累积评估过程中的总损失
+    all_preds = [] # 存储所有的预测结果
+    all_labels = [] # 存储所有的真实标签
+    all_raw_outputs = [] # 存储模型原始输出 (logits 或概率)，用于更深入的分析
+
+    # 使用 tqdm 显示评估进度
     progress_bar = tqdm(dataloader, desc='评估')
 
-    with torch.no_grad(): # 禁用梯度计算，节省内存和计算资源
+    # 关闭梯度计算上下文
+    # 在评估阶段，我们不需要计算梯度，这样做可以节省内存并加速计算
+    with torch.no_grad():
+        # 迭代评估数据加载器
         for batch in progress_bar:
-            # 数据移动到设备
+            # 获取数据并移动到设备
             texts = batch['texts'].to(device)
             labels = batch['labels'].to(device)
             lengths = batch['lengths'].to(device)
 
-            # 前向传播
-            outputs = model(texts, lengths)
+            # 前向传播，获取模型输出
+            outputs = model(texts, lengths) # outputs 形状: (Batch, num_classes)
             # 计算损失
             loss = criterion(outputs, labels)
 
+            # 累加损失
             total_loss += loss.item()
+            # 更新进度条信息
             progress_bar.set_postfix({'loss': f'{loss.item():.4f}'})
 
-            # 获取预测类别 (取 logits 中概率最大的索引)
+            # 保存原始输出 (logits) 到列表中，先移动到 CPU 并分离计算图
+            all_raw_outputs.append(outputs.cpu().detach())
+
+            # 获取预测类别
             _, preds = torch.max(outputs, 1)
-            # 将预测结果和真实标签添加到列表中 (移回 CPU 并转为 NumPy 数组)
+            # 收集预测和真实标签
             all_preds.extend(preds.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
 
-    # 计算准确率
+            # --- 调试信息：打印前几个批次的预测、标签和概率 ---
+            # 这有助于在训练/评估早期快速判断模型是否在学习
+            # if len(all_preds) <= 160:  # 假设 batch_size=32, 打印约前5个批次
+            #     print(f"批次 {len(all_preds) // 32}:")
+            #     print(f"  预测: {preds[:5].cpu().numpy()}")
+            #     print(f"  标签: {labels[:5].cpu().numpy()}")
+            #     # 使用 softmax 将 logits 转换为概率
+            #     print(f"  输出 (概率): {torch.softmax(outputs[:5], dim=1).cpu().numpy()}")
+
+    # --- 评估结束后的分析 ---
+    # 检查预测和标签的分布
+    print("评估预测分布:", Counter(all_preds))
+    print("评估标签分布:", Counter(all_labels)) # 理想情况下应与预测分布相似
+
+    # 计算随机预测的准确率作为基准
+    # 如果模型的准确率不显著高于随机猜测，说明模型可能没有学到有效信息
+    random_preds = np.random.randint(0, num_classes, size=len(all_labels)) # num_classes 在这里是 2
+    random_acc = accuracy_score(all_labels, random_preds)
+    print(f"随机预测准确率 (基准): {random_acc:.4f}")
+
+    # 计算模型在评估集上的真实准确率
     accuracy = accuracy_score(all_labels, all_preds)
-    # 返回平均验证损失、准确率、所有预测标签和所有真实标签
+
+    # --- 对原始输出进行更详细的分析 ---
+    # 将所有批次的原始输出张量连接起来
+    all_outputs = torch.cat(all_raw_outputs, dim=0) # 形状: (TotalSamples, num_classes)
+    # 计算每个样本属于每个类别的概率
+    probs = torch.softmax(all_outputs, dim=1).numpy() # 形状: (TotalSamples, num_classes)
+
+    # 计算每个类别的平均预测概率
+    # 这可以帮助了解模型预测的“信心”程度
+    avg_prob_class0 = np.mean(probs[:, 0]) # 类别 0 (负面) 的平均概率
+    avg_prob_class1 = np.mean(probs[:, 1]) # 类别 1 (正面) 的平均概率
+    print(f"类别0平均概率: {avg_prob_class0:.4f}, 类别1平均概率: {avg_prob_class1:.4f}")
+
+    # 返回平均评估损失、准确率、所有预测标签和所有真实标签
     return total_loss / len(dataloader), accuracy, all_preds, all_labels
+
+# 解释: 这个函数用于在模型训练完成后（或每个 epoch 后）评估其在未见过的数据（验证集或测试集）上的性能。
+# 1.  `model.eval()`: 将模型切换到评估模式。这很重要，因为它会禁用 Dropout 等只在训练时使用的层，确保评估结果的确定性。
+# 2.  `with torch.no_grad()`: 创建一个上下文管理器，在此代码块内禁用梯度计算。因为评估时不需要更新模型参数，这样做可以减少内存消耗并加快计算速度。
+# 3.  迭代 `dataloader` 获取评估批次数据。
+# 4.  **核心评估步骤 (对于每个批次)**:
+#     *   数据移动到 `device`。
+#     *   `outputs = model(...)`: 前向传播，获得模型预测。
+#     *   `loss = criterion(...)`: 计算损失（可选，但有助于监控验证损失）。
+#     *   记录损失、原始输出 (`logits`)、预测类别 (`preds`) 和真实标签 (`labels`)。
+# 5.  **评估后分析**:
+#     *   打印预测类别和真实标签的分布（使用 `Counter`），可以快速检查是否有类别不平衡或模型预测偏差问题。
+#     *   计算并打印随机猜测的准确率作为基准，方便比较模型性能。
+#     *   使用 `sklearn.metrics.accuracy_score` 计算模型在整个评估集上的准确率。
+#     *   对所有批次的原始输出 (`logits`) 进行汇总，计算 Softmax 概率，并打印每个类别的平均预测概率，提供模型预测置信度的信息。
+# 6.  返回平均损失、准确率以及用于后续分析（如绘制混淆矩阵）的预测标签列表和真实标签列表。
 ```
 
-*   设置模型为评估模式 (`model.eval()`)。这会禁用 Dropout，并让 Batch Normalization 使用运行时的统计数据。
-*   初始化 `total_loss` 以及用于存储所有预测和标签的列表 `all_preds`, `all_labels`。
-*   使用 `tqdm` 包装 `dataloader`。
-*   **`with torch.no_grad():`**: 在这个块内部，PyTorch 不会计算梯度。这在评估阶段是必要的，因为我们不需要更新模型，这样做可以减少内存消耗并加速计算。
-*   **遍历批次**:
-    *   获取数据并移动到 `device`。
-    *   **前向传播**: 获取模型输出 `outputs`。
-    *   **计算损失**: 计算当前批次的损失。
-    *   累加损失值。
-    *   **获取预测**: `_, preds = torch.max(outputs, 1)` 找到 `outputs` (logits) 中每个样本得分最高的那个类别的索引，作为模型的预测结果 `preds`。
-    *   将当前批次的预测 `preds` 和真实标签 `labels` 移回 CPU (`.cpu()`)，转换为 NumPy 数组 (`.numpy()`)，并添加到 `all_preds` 和 `all_labels` 列表中。
-*   循环结束后，使用 `sklearn.metrics.accuracy_score` 计算整个验证集上的准确率。
-*   返回平均验证损失、准确率以及所有预测和真实标签的列表。
-
----
-
-### 9. 可视化函数 (Plotting Functions)
+**12. 绘制混淆矩阵 (`plot_confusion_matrix`)**
 
 ```python
 def plot_confusion_matrix(true_labels, pred_labels):
-    # ... (代码省略)
-    plt.savefig('confusion_matrix.png')
-    plt.show()
+    # true_labels: 真实的标签列表
+    # pred_labels: 模型预测的标签列表
 
-def plot_training_history(train_losses, val_losses, accuracies):
-    # ... (代码省略)
-    plt.savefig('training_history.png')
-    plt.show()
+    # 1. 计算混淆矩阵
+    # 使用 sklearn.metrics.confusion_matrix 计算
+    # cm 是一个 NumPy 数组，例如 [[TN, FP], [FN, TP]]
+    # TN: True Negative, FP: False Positive
+    # FN: False Negative, TP: True Positive
+    cm = confusion_matrix(true_labels, pred_labels)
+
+    # 2. 使用 Matplotlib 和 Seaborn 绘制热力图
+    plt.figure(figsize=(8, 6)) # 设置图像大小
+    sns.heatmap(cm,              # 要绘制的数据 (混淆矩阵)
+                annot=True,      # 在单元格中显示数值
+                fmt='d',         # 数值格式为整数 ('d')
+                cmap='Blues',    # 使用蓝色系调色板
+                xticklabels=['Negative', 'Positive'], # x 轴刻度标签
+                yticklabels=['Negative', 'Positive']  # y 轴刻度标签
+               )
+    plt.xlabel('Predicted') # x 轴标签
+    plt.ylabel('True')      # y 轴标签
+    plt.title('Confusion Matrix') # 图像标题
+    plt.savefig('confusion_matrix.png') # 将图像保存到文件
+    plt.show() # 显示图像
+
+# 解释: 这个函数用于可视化模型的分类结果，展示模型在每个类别上的表现以及容易混淆的类别。
+# 1.  它接收真实的标签列表和模型预测的标签列表作为输入。
+# 2.  调用 `sklearn.metrics.confusion_matrix` 来计算混淆矩阵。
+# 3.  使用 `seaborn.heatmap` 将混淆矩阵绘制成热力图，颜色深浅表示数量多少。
+#     -   `annot=True`: 在每个格子上显示具体的数值。
+#     -   `fmt='d'`: 设置显示格式为十进制整数。
+#     -   `cmap='Blues'`: 设置颜色映射为蓝色系。
+#     -   `xticklabels`, `yticklabels`: 设置坐标轴刻度的含义（负面/正面）。
+# 4.  添加坐标轴标签和标题。
+# 5.  `plt.savefig`: 将生成的图像保存为 'confusion_matrix.png' 文件。
+# 6.  `plt.show()`: 在屏幕上显示图像。
+# 混淆矩阵是评估分类模型性能的重要工具，可以清晰地看到真阳性、真阴性、假阳性、假阴性的数量。
 ```
 
-*   **`plot_confusion_matrix(true_labels, pred_labels)`**:
-    *   使用 `sklearn.metrics.confusion_matrix` 计算混淆矩阵。
-    *   使用 `seaborn.heatmap` 将混淆矩阵可视化为热力图。`annot=True` 在格子上显示数值，`fmt='d'` 表示整数格式，`cmap='Blues'` 设置颜色主题。
-    *   设置 x 轴、y 轴标签和标题。
-    *   将图像保存为 `confusion_matrix.png`。
-    *   `plt.show()` 显示图像。
-*   **`plot_training_history(train_losses, val_losses, accuracies)`**:
-    *   创建两个子图。
-    *   **子图 1**: 绘制训练损失 (`train_losses`) 和验证损失 (`val_losses`) 随 epoch 变化的曲线。添加图例、坐标轴标签和标题。
-    *   **子图 2**: 绘制验证准确率 (`accuracies`) 随 epoch 变化的曲线。添加坐标轴标签和标题。
-    *   `plt.tight_layout()` 调整子图布局，防止重叠。
-    *   将图像保存为 `training_history.png`。
-    *   `plt.show()` 显示图像。
-
----
-
-### 10. 主函数 (Main Function)
+**13. 绘制训练历史 (`plot_training_history`)**
 
 ```python
+def plot_training_history(train_losses, val_losses, accuracies):
+    # train_losses: 包含每个 epoch 训练损失的列表
+    # val_losses: 包含每个 epoch 验证损失的列表
+    # accuracies: 包含每个 epoch 验证准确率的列表
+
+    plt.figure(figsize=(12, 5)) # 设置整个图的大小
+
+    # 绘制第一个子图：损失曲线
+    plt.subplot(1, 2, 1) # 创建一个 1 行 2 列的子图网格，当前激活第 1 个
+    plt.plot(train_losses, label='Training Loss') # 绘制训练损失曲线
+    plt.plot(val_losses, label='Validation Loss') # 绘制验证损失曲线
+    plt.xlabel('Epoch') # x 轴标签
+    plt.ylabel('Loss') # y 轴标签
+    plt.legend() # 显示图例 (区分训练和验证损失)
+    plt.title('Loss Curves') # 子图标题
+
+    # 绘制第二个子图：准确率曲线
+    plt.subplot(1, 2, 2) # 激活第 2 个子图
+    plt.plot(accuracies) # 绘制验证准确率曲线
+    plt.xlabel('Epoch') # x 轴标签
+    plt.ylabel('Accuracy') # y 轴标签
+    plt.title('Validation Accuracy') # 子图标题
+
+    plt.tight_layout() # 自动调整子图参数，使其填充整个图像区域，防止标签重叠
+    plt.savefig('training_history.png') # 保存图像
+    plt.show() # 显示图像
+
+# 解释: 这个函数用于可视化训练过程中的关键指标随 epoch 的变化情况。
+# 1.  接收训练损失列表、验证损失列表和验证准确率列表。
+# 2.  创建一个包含两个子图的图形窗口。
+# 3.  **第一个子图**: 绘制训练损失和验证损失随 epoch 变化的曲线。这有助于：
+#     *   观察模型是否在学习（损失是否下降）。
+#     *   判断是否过拟合（训练损失持续下降，但验证损失开始上升）。
+#     *   判断是否欠拟合（训练和验证损失都很高或下降缓慢）。
+# 4.  **第二个子图**: 绘制验证准确率随 epoch 变化的曲线。这直接反映了模型在未见过数据上的性能变化。
+# 5.  添加标签、标题和图例，使图像易于理解。
+# 6.  `plt.tight_layout()` 优化布局。
+# 7.  保存并显示图像。
+# 这些曲线对于监控训练过程、调整超参数（如学习率、正则化强度）以及选择最佳模型（通常是验证性能最好时的模型）至关重要。
+```
+
+**14. 主函数 (`main`)**
+
+```python
+# 主函数
 def main():
     print("加载数据集...")
     try:
-        # 使用自定义函数加载数据
+        # 1. 加载数据
+        # 使用我们自己实现的加载函数替代torchtext
         train_dataset, test_dataset, vocab = load_imdb_data_manually()
     except Exception as e:
         print(f"无法加载IMDB数据集: {e}")
-        return
+        return # 如果加载失败，则退出程序
 
-    # 创建数据集子集 (为了快速演示)
-    train_subset_size = min(10000, len(train_dataset))
-    test_subset_size = min(2000, len(test_dataset))
-    train_subset = torch.utils.data.Subset(train_dataset, range(train_subset_size))
-    test_subset = torch.utils.data.Subset(test_dataset, range(test_subset_size))
-    print(...) # 打印数据集大小信息
+    # 2. 创建数据集子集 (可选，用于快速实验)
+    # 为了快速训练和测试，可以只使用原始数据集的一部分
+    train_subset_size = min(10000, len(train_dataset)) # 最多取 10000 个训练样本
+    test_subset_size = min(2000, len(test_dataset))   # 最多取 2000 个测试样本
 
-    # 创建数据加载器
-    train_dataloader = DataLoader(...)
-    test_dataloader = DataLoader(...)
+    # 使用 random.sample 随机抽取指定数量的索引，而不是简单地取前 N 个
+    # 这样可以保证子集的数据分布与原始数据集更接近
+    train_indices = random.sample(range(len(train_dataset)), train_subset_size)
+    test_indices = random.sample(range(len(test_dataset)), test_subset_size)
 
-    # 定义模型超参数
-    vocab_size = len(vocab)
-    embed_dim = 256
-    num_heads = 8
-    num_layers = 4
-    ff_dim = 512
-    num_classes = 2
-    dropout = 0.1
+    # 使用 torch.utils.data.Subset 创建子集对象
+    train_subset = torch.utils.data.Subset(train_dataset, train_indices)
+    test_subset = torch.utils.data.Subset(test_dataset, test_indices)
 
-    # 初始化模型并移动到设备
-    model = TransformerClassifier(...) .to(device)
+    print(f"训练数据集大小: {len(train_subset)}")
+    print(f"测试数据集大小: {len(test_subset)}")
+    print(f"词汇表大小: {len(vocab)}") # 打印最终使用的词汇表大小
 
-    # 设置优化器和损失函数
-    optimizer = optim.Adam(model.parameters(), lr=0.0001)
+    # 3. 创建数据加载器 (DataLoaders)
+    train_dataloader = DataLoader(
+        train_subset,           # 使用训练子集
+        batch_size=32,          # 每个批次包含 32 个样本
+        shuffle=True,           # 在每个 epoch 开始时打乱数据顺序 (对训练很重要)
+        collate_fn=collate_batch # 指定使用我们定义的 collate_batch 函数来处理批次数据 (处理变长序列和填充)
+    )
+
+    test_dataloader = DataLoader(
+        test_subset,            # 使用测试子集
+        batch_size=32,          # 批次大小与训练时一致
+        shuffle=False,          # 测试时不需要打乱顺序
+        collate_fn=collate_batch # 同样使用 collate_batch 处理填充
+    )
+
+    # 4. 定义模型超参数
+    vocab_size = len(vocab)    # 词汇表大小，来自加载的数据
+    embed_dim = 256            # 词嵌入向量的维度
+    num_heads = 8              # Transformer 注意力头数
+    num_layers = 4             # Transformer 编码器层数
+    ff_dim = 512               # Transformer 前馈网络中间层维度
+    num_classes = 2            # 类别数量 (正面/负面)
+    dropout = 0.3              # Dropout 比率 (设置稍高以增强正则化)
+
+    # 5. 初始化模型
+    model = TransformerClassifier(
+        vocab_size, embed_dim, num_heads, num_layers,
+        ff_dim, num_classes, dropout=dropout
+    ).to(device) # 将模型移动到之前确定的设备 (CPU 或 GPU)
+
+    # 6. 设置优化器和损失函数
+    # 使用 Adam 优化器，学习率设为 0.0001
+    # 添加 weight_decay (L2 正则化)，有助于防止过拟合
+    optimizer = optim.Adam(model.parameters(), lr=0.0001, weight_decay=1e-5)
+    # 使用交叉熵损失函数，适用于多分类任务 (这里是二分类)
+    # 它内部包含了 Softmax 操作，所以模型输出原始 logits 即可
     criterion = nn.CrossEntropyLoss()
 
-    # 训练循环
-    epochs = 5
-    train_losses = []
-    val_losses = []
-    accuracies = []
+    # 7. 训练循环
+    epochs = 5 # 训练的总轮数
+    train_losses = [] # 记录每个 epoch 的训练损失
+    val_losses = []   # 记录每个 epoch 的验证损失
+    accuracies = []   # 记录每个 epoch 的验证准确率
 
     for epoch in range(epochs):
-        start_time = time.time()
+        start_time = time.time() # 记录 epoch 开始时间
 
-        # 调用训练和评估函数
+        # 调用训练函数进行一轮训练
         train_loss = train(model, train_dataloader, optimizer, criterion, device)
+        # 调用评估函数在测试集上进行评估 (这里用测试集作为验证集)
         val_loss, accuracy, _, _ = evaluate(model, test_dataloader, criterion, device)
 
-        # 记录历史数据
+        # 记录当前 epoch 的结果
         train_losses.append(train_loss)
         val_losses.append(val_loss)
         accuracies.append(accuracy)
 
-        elapsed_time = time.time() - start_time
-        # 打印当前 epoch 的结果
-        print(...)
+        elapsed_time = time.time() - start_time # 计算 epoch 耗时
 
-    # 最终评估
-    _, final_accuracy, pred_labels, true_labels = evaluate(...)
+        # 打印当前 epoch 的结果
+        print(f"Epoch {epoch + 1}/{epochs} - 耗时: {elapsed_time:.2f}s")
+        print(f"  训练损失: {train_loss:.4f}, 验证损失: {val_loss:.4f}, 验证准确率: {accuracy:.4f}")
+
+    # 8. 最终评估
+    # 训练结束后，在测试集上进行最后一次评估，获取最终性能指标和预测结果
+    _, final_accuracy, pred_labels, true_labels = evaluate(
+        model, test_dataloader, criterion, device
+    )
     print(f"最终测试准确率: {final_accuracy:.4f}")
 
-    # 可视化结果
+    # 9. 可视化结果
     print("正在生成混淆矩阵...")
+    # 使用最终评估得到的真实标签和预测标签绘制混淆矩阵
     plot_confusion_matrix(true_labels, pred_labels)
+
     print("正在生成训练历史图...")
+    # 使用记录的训练/验证损失和准确率绘制训练历史曲线
     plot_training_history(train_losses, val_losses, accuracies)
 
-    # 保存模型状态字典
+    # 10. 保存模型
+    # 保存训练好的模型的状态字典 (包含所有可学习参数)
     torch.save(model.state_dict(), "transformer_classifier.pth")
     print("模型已保存到 transformer_classifier.pth")
-```
 
-*   **数据加载**: 调用 `load_imdb_data_manually()` 加载数据。包含 `try...except` 块以处理可能的加载错误。
-*   **创建子集**: 为了加快训练速度（尤其是在 CPU 上），使用 `torch.utils.data.Subset` 从完整数据集中选取一部分样本进行训练和测试。
-*   **创建 DataLoader**: 使用子集创建训练和测试数据加载器。
-*   **定义超参数**: 设置模型结构相关的参数，如词汇表大小、嵌入维度、注意力头数、Transformer 层数、前馈网络维度、类别数和 Dropout 率。
-*   **初始化模型**: 创建 `TransformerClassifier` 实例，并将模型移动到之前确定的 `device` (CPU 或 GPU)。
-*   **设置优化器和损失函数**:
-    *   `optimizer`: 选择 Adam 优化器，传入模型的可训练参数 (`model.parameters()`) 和学习率 (`lr`)。
-    *   `criterion`: 选择交叉熵损失函数 (`nn.CrossEntropyLoss`)，适用于多分类任务（这里是二分类）。
-*   **训练循环**:
-    *   设置训练的总轮数 `epochs`。
-    *   初始化列表用于存储每轮的训练损失、验证损失和验证准确率。
-    *   **按轮次训练**:
-        *   记录开始时间。
-        *   调用 `train()` 函数执行一轮训练，获取训练损失。
-        *   调用 `evaluate()` 函数在测试集上进行评估，获取验证损失和准确率。
-        *   将损失和准确率记录到列表中。
-        *   计算并打印当前轮次耗时及各项指标。
-*   **最终评估**: 训练结束后，再次调用 `evaluate()` 获取最终的测试准确率以及所有预测和真实标签，用于后续可视化。
-*   **可视化**: 调用 `plot_confusion_matrix` 和 `plot_training_history` 生成并显示/保存结果图表。
-*   **保存模型**: 使用 `torch.save(model.state_dict(), "...")` 将训练好的模型权重（状态字典）保存到文件 `transformer_classifier.pth`，以便将来加载和使用。
 
----
-
-### 11. 执行入口 (Execution Guard)
-
-```python
+# Python 入口点检查
 if __name__ == "__main__":
+    # 只有当脚本作为主程序直接运行时，才执行 main() 函数
+    # 如果此脚本被其他脚本导入，则 main() 不会自动执行
     main()
+
+# 解释: `main` 函数是整个程序的入口和协调者，它按照顺序执行了模型训练和评估的所有步骤。
+# 1.  **加载数据**: 调用 `load_imdb_data_manually` 获取训练/测试数据集和词汇表。包含错误处理。
+# 2.  **创建子集**: (可选) 为了加速实验，使用 `random.sample` 和 `torch.utils.data.Subset` 创建了较小规模的训练和测试子集。
+# 3.  **创建 DataLoader**: 使用 `DataLoader` 将数据集包装起来，实现批处理、数据打乱和自动填充（通过 `collate_fn`）。
+# 4.  **定义超参数**: 设置了模型结构（嵌入维度、头数、层数等）、类别数和 Dropout 比率。
+# 5.  **初始化模型**: 根据超参数创建 `TransformerClassifier` 实例，并将其移动到 `device`。
+# 6.  **设置优化器和损失函数**: 选择 Adam 优化器和交叉熵损失函数。加入了 `weight_decay` 进行 L2 正则化。
+# 7.  **训练循环**:
+#     *   设置训练的总 `epochs`。
+#     *   初始化列表来存储每个 epoch 的损失和准确率。
+#     *   外层循环遍历每个 epoch。
+#     *   在每个 epoch 内，调用 `train` 函数执行一次训练。
+#     *   调用 `evaluate` 函数在测试集（在此代码中充当验证集）上评估模型性能。
+#     *   记录该 epoch 的训练损失、验证损失和验证准确率。
+#     *   打印该 epoch 的结果和耗时。
+# 8.  **最终评估**: 训练循环结束后，再次调用 `evaluate` 函数获取模型在测试集上的最终性能指标以及预测结果和真实标签，用于后续分析。
+# 9.  **可视化**: 调用 `plot_confusion_matrix` 和 `plot_training_history` 函数，生成并保存/显示混淆矩阵和训练曲线图。
+# 10. **保存模型**: 使用 `torch.save` 保存模型的 `state_dict`（包含所有学习到的权重和偏差）。这允许之后加载模型进行推理或继续训练，而无需重新训练。
+# 11. `if __name__ == "__main__":`: 这是 Python 脚本的标准入口点，确保 `main()` 函数只在直接运行此脚本时执行。
 ```
 
-*   这是 Python 脚本的标准入口点。
-*   `__name__` 是 Python 的一个内置变量。当脚本被直接运行时，`__name__` 的值是 `"__main__"`。如果脚本作为模块被其他脚本导入，则 `__name__` 的值是模块名（文件名）。
-*   这个 `if` 语句确保 `main()` 函数只有在脚本被直接执行时才会被调用，而不是在被导入时调用。
-
+至此，整个代码的分析就完成了。这段代码实现了一个完整的情感分类流程：从手动下载和预处理 IMDB 数据集，构建词汇表，定义 Transformer 模型，到训练、评估模型，最后可视化结果并保存模型。
