@@ -212,6 +212,8 @@ class MultiHeadSelfAttention(nn.Module):
 
 在 Vision Transformer (ViT) 的多头自注意力 (Multi-Head Self-Attention) 机制中，“**token**” 指的是输入到 Transformer 编码器块的**序列中的每一个元素**。
 
+**tokens是什么？**
+
 具体来说，在 ViT 的标准流程中，这些 "tokens" 包括：
 
 1.  **图像块嵌入 (Patch Embeddings)**: 原始图像被分割成固定大小的、不重叠的小块 (patches)。==每个图像块==通过一个线性层（通常用卷积实现）被转换成一个固定维度 (`embed_dim`) 的向量。**每一个这样的向量（小块）就是一个 "token"**。
@@ -594,13 +596,11 @@ class VisionTransformer(nn.Module):
     *   `self.ln`: 定义最后一个 Layer Normalization 层，在 Transformer 块之后、分类头之前应用。
     *   `self.head`: 定义分类头，是一个简单的 `nn.Linear` 层，将 CLS token 的最终表示映射到 `num_classes` 个输出（logits）。
     *   **权重初始化**: 对 `pos_embed` 和 `cls_token` 使用截断正态分布进行初始化。然后调用 `self.apply(self._init_weights)`，将 `_init_weights` 方法递归地应用到模型的所有子模块（如 Linear 层, LayerNorm 层）上，进行特定的初始化。
-
 *   **`_init_weights` 方法:**
     *   这是一个辅助函数，用于自定义模型内部各层的权重初始化方式。
     *   对 `nn.Linear` 层的权重使用截断正态分布初始化，偏置初始化为 0。
     *   对 `nn.LayerNorm` 层的权重 (gamma) 初始化为 1，偏置 (beta) 初始化为 0。
     *   良好的权重初始化有助于模型的稳定训练和收敛。
-
 *   **`forward` 方法:**
     *   定义了模型的前向传播逻辑，即数据如何流过模型。
     *   **步骤 1: Patch Embedding**: 输入图像 `x` 首先通过 `patch_embed` (Conv2d 层) 转换成 patch 嵌入。然后通过 `flatten` 和 `transpose` 操作，将形状整理成 Transformer 期望的 `[batch_size, sequence_length, embed_dim]` 格式。
@@ -611,6 +611,25 @@ class VisionTransformer(nn.Module):
     *   **步骤 6: 提取 CLS Token**: 从处理后的序列中，只取出第一个 token（即 CLS token）对应的输出向量。
     *   **步骤 7: Classification Head**: 将提取出的 CLS token 向量送入最后的 `self.head` 线性层，得到最终的分类 logits。
     *   返回 logits。
+
+在标准的 Vision Transformer (ViT) 实现中，这个 `self.pos_embed` **通常是可训练的参数 (learnable parameter)**。解释如下：
+
+1.  **可训练性 (Trainable):**
+    *   `self.pos_embed` 通常被定义为一个 `torch.nn.Parameter`。这意味着它和模型中的其他权重（比如卷积核、全连接层的权重）一样，会在训练过程中通过反向传播和优化器（如 Adam、SGD）进行学习和更新。
+    *   模型会自己学习到最适合当前任务和数据集的位置表示方式。虽然也有使用固定（如正弦/余弦）位置编码的变种，但可学习的位置嵌入在 ViT 中更常见且效果通常不错。
+
+2.  **形状匹配 (Shape Matching):**
+    *   **输入 `x` 的形状:** `[batch_size, num_patches + 1, embed_dim]`
+        *   `batch_size`: 一批处理多少张图片。
+        *   `num_patches + 1`: 图片被切分成 `num_patches` 个块 (patch)，再加上一个额外的 [CLS] token 用于分类，所以序列长度是 `num_patches + 1`。
+        *   `embed_dim`: 每个 patch (以及 [CLS] token) 经过 Embedding 层后转换成的向量维度。
+    *   **`self.pos_embed` 的形状:** `[1, num_patches + 1, embed_dim]`
+        *   `1`: 这个维度是 1，因为这组学习到的位置编码对于**同一批次中的所有图片都是一样的**。我们只需要学习一套位置编码。
+        *   `num_patches + 1`: 必须和输入序列的长度完全一致，保证每个 token (patch embedding 或 [CLS] token embedding) 都有一个对应的位置编码向量。
+        *   `embed_dim`: 必须和 token embedding 的维度一致，这样才能进行**元素级别的相加 (element-wise addition)**。
+    *   **相加操作:** `x = x + self.pos_embed`
+        *   PyTorch 的广播机制 (Broadcasting) 在这里起作用。它会自动将 `self.pos_embed` 的第一个维度（大小为 1）扩展到 `batch_size`，使其形状变为 `[batch_size, num_patches + 1, embed_dim]`，然后才能和 `x` 对应元素相加。
+        *   相加的目的是将学习到的位置信息注入到每个 token embedding 中，这样后续的 Transformer Encoder 层就能同时利用 token 的内容信息和位置信息。
 
 **整体作用:**
 
@@ -821,6 +840,27 @@ def train(model, train_loader, criterion, optimizer, epoch):
 *   **进度条更新**: `pbar.set_postfix` 实时显示训练过程中的损失和准确率。
 *   **返回**: 函数返回该训练 epoch 的平均损失和准确率。
 
+**enumerate()函数的作用**
+
+`enumerate()` 是 Python 的一个内置函数，它的作用是将一个可迭代对象（比如列表、元组、字符串，或者像你代码中的 `pbar` 这种迭代器）组合为一个索引序列，同时列出数据和数据下标。
+
+简单来说，`enumerate(pbar)` 会在每次迭代时，**返回一对值：(当前迭代的次数/索引, `pbar` 中对应迭代返回的元素)**。
+
+在你给出的代码 `for i, (images, labels) in enumerate(pbar):` 中：
+
+1.  `pbar`: 这很可能是一个数据加载器（DataLoader）或者类似的可迭代对象，它在每次迭代时会产生一批 `images` 和对应的 `labels`。它可能还被 `tqdm` 包裹，用于显示进度条。
+2.  `enumerate(pbar)`: 对 `pbar` 进行迭代。
+    *   在**第一次**循环时，它会返回 `(0, pbar产生的第一批数据)`。
+    *   在**第二次**循环时，它会返回 `(1, pbar产生的第二批数据)`。
+    *   以此类推...
+3.  `for i, (images, labels) in ...`: 这个 `for` 循环接收 `enumerate` 返回的每一对值：
+    *   `i`: 这个变量接收每次迭代的**索引**（从 0 开始）。所以 `i` 会依次是 0, 1, 2, ...，代表这是第几次迭代（或者说第几批数据）。
+    *   `(images, labels)`: 这个元组接收 `pbar` 在该次迭代中产生的**实际数据**。因为 `pbar` 产生的是图像和标签对，所以这里用 `(images, labels)` 来解包接收。
+
+**总结:**
+
+`enumerate()` 函数让你在遍历一个迭代器（如 `pbar`）的同时，还能方便地获得一个从 0 开始的计数器（变量 `i`），告诉你当前是第几次迭代。这在需要知道当前处理到第几批数据或者想要按顺序记录/处理数据时非常有用。
+
 **整体作用:**
 
 `train` 函数实现了模型在一个完整训练轮次（epoch）中的核心逻辑。它负责：
@@ -880,6 +920,42 @@ def evaluate(model, test_loader, criterion):
 *   **前向传播与损失计算**: 与 `train` 函数类似，执行模型的前向传播并计算损失，但没有反向传播和参数更新的步骤。
 *   **统计**: 同样累积损失和计算准确率。
 *   **返回**: 函数返回在整个测试集上计算得到的平均损失和准确率。
+
+我们来分解这行代码 `_, predicted = outputs.max(1)`：
+
+1.  **`outputs`**:
+    *   这通常是一个 PyTorch Tensor（张量），代表神经网络模型最后一层的输出。
+    *   在一个典型的分类任务中，`outputs` 的形状（shape）通常是 `[batch_size, num_classes]`。
+        *   `batch_size`: 这一批输入数据的数量（比如，同时处理了多少张图片）。
+        *   `num_classes`: 你的模型需要区分的总类别数（比如，区分 10 个数字，`num_classes` 就是 10）。
+    *   这个张量里的每个值，通常代表模型预测输入样本属于对应类别的“分数”或“置信度”（可能是原始的 logits，也可能是经过 Softmax 后的概率）。
+
+2.  **`.max(1)`**:
+    *   这是在 `outputs` 张量上调用 `max()` 方法。
+    *   `max()` 函数用于寻找张量中的最大值。
+    *   参数 `1` 指定了**沿着哪个维度（dimension）**寻找最大值。在 PyTorch（和 NumPy）中，维度是从 0 开始计数的。
+        *   对于形状为 `[batch_size, num_classes]` 的 `outputs`：
+            *   维度 `0` 是指沿着 `batch_size` 的方向（即，比较不同样本在同一个类别上的分数）。
+            *   维度 `1` 是指沿着 `num_classes` 的方向（即，对于**每一个样本**，比较它在**所有类别**上的分数，找出最高分）。
+    *   因此，`outputs.max(1)` 的作用是：对于 `batch_size` 中的**每一个样本**，在 `num_classes` 个分数中找到**最大**的那个分数。
+    *   **返回值**: `outputs.max(dim)` 方法会返回一个包含两个张量的元组（tuple）：
+        1.  第一个张量：在指定维度 `dim` 上找到的**最大值**本身。
+        2.  第二个张量：这些最大值在指定维度 `dim` 上的**索引（index）**。
+
+3.  **`_, predicted = ...`**:
+    *   这是 Python 的**元组解包（tuple unpacking）**语法。它将 `outputs.max(1)` 返回的元组中的两个元素分别赋值给左边的变量。
+    *   `_` (下划线): 这是一个常用的 Python 约定，用来表示“我**不关心**这个位置返回的值”。在这里，我们不关心每个样本得到的具体最高分数是多少，所以用 `_` 来接收 `outputs.max(1)` 返回的第一个张量（最大值）。
+    *   `predicted`: 这个变量接收 `outputs.max(1)` 返回的**第二个张量**，也就是**最大值所在的索引**。
+
+**总结与意义:**
+
+在分类任务中，模型输出的最高分所在的**索引**通常就代表了模型预测的**类别标签**。
+
+所以，`_, predicted = outputs.max(1)` 这行代码的整体意思是：
+
+**对于 `outputs` 中的每一个样本（沿着维度 1 操作），找到分数最高的那个类别对应的索引，并将这些索引（预测的类别标签）存储在 `predicted` 变量中。我们忽略了实际的最高分数值本身。**
+
+`predicted` 最终会是一个形状为 `[batch_size]` 的张量，其中每个元素是对应输入样本的预测类别索引（例如，0, 5, 2, ...）。
 
 **整体作用:**
 

@@ -64,10 +64,36 @@ ViT 的核心创新在于，它找到了一种方法**将 2D 的图像“序列�
 
 #### 3. [CLS] Token 嵌入
 
-*   **目的**: 受到 BERT 模型在 NLP 中成功实践的启发，ViT 引入了一个**特殊的可学习嵌入向量**，称为 [CLS] (Classification) Token。这个 Token 不对应图像中的任何特定块，而是作为一个“全局信息聚合器”。在经过 Transformer 编码器的多层处理后，**最终只使用这个 [CLS] Token 对应的输出向量来进行整个图像的分类**。这样做的好处是提供了一个单一的、集成的表示来代表整个图像，简化了下游分类任务的接口。
-*   **过程**:
-    *   创建一个**可学习的** $D$ 维向量 $x_{class}$（与块嵌入具有相同的维度 $D$）。这个向量在训练开始时随机初始化，并与其他模型参数一起通过反向传播进行学习。
-    *   将这个 $x_{class}$ 向量**拼接 (Concatenate)** 到 $N$ 个块嵌入序列 $z_{patch}$ 的**最前面**。
+**目的**: 受到 BERT 模型在 NLP 中成功实践的启发，ViT 引入了一个特殊的可学习嵌入向量，称为 [CLS] (Classification) Token。这个 Token 不对应图像中的任何特定块，而是作为一个“全局信息聚合器”。在经过 Transformer 编码器的多层处理后，最终只使用这个 [CLS] Token 对应的输出向量来进行整个图像的分类。这样做的好处是提供了一个单一的、集成的表示来代表整个图像，简化了下游分类任务的接口。
+
+**过程与原理**:
+
+*   **创建可学习向量**: 创建一个**可学习的** $D$ 维向量 $x_{class}$（与块嵌入具有相同的维度 $D$）。
+*   **拼接**: 将这个 $x_{class}$ 向量**拼接 (Concatenate)** 到 $N$ 个块嵌入序列 $z_{patch}$ 的**最前面**。
+
+**详细解释**:
+
+1.  **可学习参数**:
+    *   [CLS] token 本身并不对应输入图像的任何特定区域（不像其他的 token 对应图像块/patch）。
+    *   它不是一个“空”的占位符。它会被初始化为一个**独立的、可学习的嵌入向量 (learnable embedding vector)**。
+    *   这个嵌入向量的维度通常与 patch 嵌入的维度 (embed_dim) 相同，这样它才能和其他 patch 嵌入拼接在一起形成序列。
+
+2.  **初始化**:
+    *   在模型训练开始之前，这个 [CLS] token 的嵌入向量会像网络中的其他权重（比如线性层的权重、偏置）一样被**随机初始化**（通常是根据某种分布，如正态分布或均匀分布，取较小的值）。
+    *   所以，它一开始确实没有包含关于当前输入图像的“具体内容”，但它有一个**初始的数值表示**。
+
+3.  **学习过程**:
+    *   这个初始化的 [CLS] token 嵌入向量会**参与整个训练过程**。
+    *   它会和 patch 嵌入一起加上位置编码。
+    *   然后，整个序列（[CLS] token + patch tokens）会通过 Transformer Encoder 层。
+    *   在 Transformer 的自注意力 (Self-Attention) 机制中，[CLS] token 会与其他所有 token（包括它自己和其他 patch token）进行交互，**聚合来自整个图像的信息**。
+    *   通过反向传播，这个 [CLS] token 的嵌入向量以及模型的所有其他参数都会被**不断更新和学习**，目标是让**最终**通过 Transformer Encoder 后的 [CLS] token 的状态能够最好地用于下游任务（通常是图像分类）。
+
+**总结**:
+
+[CLS] token 的嵌入是一个**专门为它创建的可学习参数**。它以随机值开始，**没有预设的“具体内容”**，但也不是“空的”。它的**最终意义和内容是在训练过程中通过与图像的其他部分交互而学习到的**，目的是在 Transformer 处理后，它的最终状态能代表整个图像的全局信息，用于最终的分类决策。
+
+你可以把它想象成一个特殊的“代表”，一开始它什么都不知道（随机初始化），但在“会议”（Transformer层）中，它听取了所有其他“成员”（patch tokens）的发言，并结合自己的理解，最终形成了一个总结报告（最终的 [CLS] 输出），这个报告用来做最后的决定（分类）。这个“代表”本身的能力（它的嵌入向量）也是在一次次开会（训练）中不断提升的。
 
 #### 4. 位置嵌入 (Positional Embedding)
 
@@ -81,6 +107,24 @@ ViT 的核心创新在于，它找到了一种方法**将 2D 的图像“序列�
     *   $[x_{class}; z_{patch}]$: 表示将 [CLS] Token 向量和 $N$ 个块嵌入向量按顺序拼接起来，形成一个 $(N+1, D)$ 的矩阵。
     *   $E_{pos}$: 形状为 $(N+1, D)$ 的可学习位置嵌入矩阵。
     *   `+`: 表示逐元素相加。
+*   在标准的 Vision Transformer (ViT) 代码实现中，这个 `self.pos_embed` **通常是可训练的参数 (learnable parameter)**。解释如下：
+    1.  **可训练性 (Trainable):**
+        *   `self.pos_embed` 通常被定义为一个 `torch.nn.Parameter`。这意味着它和模型中的其他权重（比如卷积核、全连接层的权重）一样，会在训练过程中通过反向传播和优化器（如 Adam、SGD）进行学习和更新。
+        *   模型会自己学习到最适合当前任务和数据集的位置表示方式。虽然也有使用固定（如正弦/余弦）位置编码的变种，但可学习的位置嵌入在 ViT 中更常见且效果通常不错。
+
+    2.  **形状匹配 (Shape Matching):**
+        *   **输入 `x` 的形状:** `[batch_size, num_patches + 1, embed_dim]`
+            *   `batch_size`: 一批处理多少张图片。
+            *   `num_patches + 1`: 图片被切分成 `num_patches` 个块 (patch)，再加上一个额外的 [CLS] token 用于分类，所以序列长度是 `num_patches + 1`。
+            *   `embed_dim`: 每个 patch (以及 [CLS] token) 经过 Embedding 层后转换成的向量维度。
+        *   **`self.pos_embed` 的形状:** `[1, num_patches + 1, embed_dim]`
+            *   `1`: 这个维度是 1，因为这组学习到的位置编码对于**同一批次中的所有图片都是一样的**。我们只需要学习一套位置编码。
+            *   `num_patches + 1`: 必须和输入序列的长度完全一致，保证每个 token (patch embedding 或 [CLS] token embedding) 都有一个对应的位置编码向量。
+            *   `embed_dim`: 必须和 token embedding 的维度一致，这样才能进行**元素级别的相加 (element-wise addition)**。
+        *   **相加操作:** `x = x + self.pos_embed`
+            *   PyTorch 的广播机制 (Broadcasting) 在这里起作用。它会自动将 `self.pos_embed` 的第一个维度（大小为 1）扩展到 `batch_size`，使其形状变为 `[batch_size, num_patches + 1, embed_dim]`，然后才能和 `x` 对应元素相加。
+            *   相加的目的是将学习到的位置信息注入到每个 token embedding 中，这样后续的 Transformer Encoder 层就能同时利用 token 的内容信息和位置信息。
+
 
 #### 5. Transformer 编码器 (Transformer Encoder)
 
