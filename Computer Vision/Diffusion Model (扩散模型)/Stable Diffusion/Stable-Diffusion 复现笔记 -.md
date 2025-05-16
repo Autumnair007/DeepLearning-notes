@@ -215,5 +215,3 @@
         *   `--plms` (或 `--ddim`): 使用的采样器类型。PLMS 和 DDIM 是常见的选项。
     *   **输出**：生成的图像通常保存在 `outputs/txt2img-samples/` 目录中。
 
-------
-
