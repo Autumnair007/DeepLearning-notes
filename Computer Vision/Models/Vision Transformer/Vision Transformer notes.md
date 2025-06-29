@@ -18,8 +18,6 @@ GELU激活函数 [激活函数](../../Basic Concepts/激活函数.md)
 
 ------
 
-好的，这是根据你的要求，在之前提供的 ViT 模型详解 Markdown 文本中，明确补充了 GELU 激活函数使用的更新版本：
-
 ## Vision Transformer (ViT) 模型详解
 
 ### 核心思想 (Elaboration)
