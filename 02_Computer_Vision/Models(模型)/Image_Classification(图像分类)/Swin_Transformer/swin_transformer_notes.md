@@ -1,4 +1,4 @@
-# Swin Transformer 学习笔记 (Pro增强版)
+# Swin Transformer 学习笔记
 
 **学习资料:**
 *   [【深度学习】详解 Swin Transformer (SwinT)-CSDN博客](https://blog.csdn.net/qq_39478403/article/details/120042232)

@@ -1,4 +1,4 @@
-#  MMSegmentation使用教程
+#  MMPretrain使用教程
 
 学习资料：[学习配置文件 — MMPretrain 1.2.0 文档](https://mmpretrain.readthedocs.io/zh-cn/latest/user_guides/config.html)
 
