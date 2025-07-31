@@ -124,7 +124,7 @@
 
 2.  **创建新配置文件**：
     在此目录下，创建一个新的 Python 文件。为了清晰明了，我们给它起一个有意义的名字，比如：
-    `convnext-tiny_cifar10_finetune.py`
+    `my-convnext-tiny-cifar10.py`
 
 3.  **编写配置文件内容**：
     用你的代码编辑器打开这个新文件，然后将下面这份我们之前已经调试好的、最终版本的代码**完整地复制**进去。
@@ -449,7 +449,7 @@
 
     ```bash
     # 使用单张 GPU 进行训练
-    python tools/train.py configs/convnext/convnext-tiny_cifar10_finetune.py
+    CUDA_VISIBLE_DEVICES=7 python tools/train.py configs/convnext_v2/my-convnext-tiny-cifar10.py
     ```
 
     *   如果你有多张 GPU，并且想使用它们加速训练，可以使用 `tools/dist_train.sh` 脚本 (Linux/macOS) 或 `tools/dist_train.ps1` (Windows PowerShell)。

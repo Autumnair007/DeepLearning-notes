@@ -1,4 +1,4 @@
-Directory Tree generated on 2025-07-14 12:09:14.490816
+Directory Tree generated on 2025-07-31 11:46:03.387093
 Root: D:\AfterDownload\Data\GithubRepository\DeepLearning-notes
 
 │   ├── .gitattributes
@@ -10,7 +10,9 @@ Root: D:\AfterDownload\Data\GithubRepository\DeepLearning-notes
 │   ├── 00_Meta(元数据)/
 │   │   ├── directory_tree.py
 │   │   ├── note_template.md
+│   │   ├── paper_notes_template.md
 │   │   ├── prompt.txt
+│   │   ├── 深度学习思考.md
 │   ├── 01_Fundamentals(基础知识)/
 │   │   ├── Basic_Concepts (基础概念)/
 │   │   │   ├── activation_functions(激活函数).md
@@ -20,6 +22,7 @@ Root: D:\AfterDownload\Data\GithubRepository\DeepLearning-notes
 │   │   │   ├── regularization(正则化).md
 │   │   │   ├── supervised_learning_concepts(监督学习概念).md
 │   │   │   ├── attention_mechanism(注意力机制).assets/
+│   │   │   ├── downsampling_and_upsampling(下采样与上采样).assets/
 │   │   ├── Machine_Learning (机器学习)/
 │   │   │   ├── Clustering (聚类)/
 │   │   │   │   ├── Birch(平衡迭代规约和聚类)/
@@ -37,6 +40,9 @@ Root: D:\AfterDownload\Data\GithubRepository\DeepLearning-notes
 │   │   │   ├── vector_space_and_orthogonality.assets/
 │   ├── 02_Computer_Vision/
 │   │   ├── Computer_Vision_Theory(计算机视觉理论)/
+│   │   │   ├── Basic_Knowledge_of_Image_Segmentation/
+│   │   │   │   ├── Dice系数和IoU.md
+│   │   │   │   ├── class_imbalance(类别不平衡).md
 │   │   │   ├── Digital_Image_Processing(数字图像处理)/
 │   │   │   │   ├── README.md
 │   │   │   │   ├── dip_note_template.md
@@ -69,10 +75,21 @@ Root: D:\AfterDownload\Data\GithubRepository\DeepLearning-notes
 │   │   │   │   │   ├── vae_notes.md
 │   │   │   │   │   ├── vae_notes.assets/
 │   │   │   ├── Image_Classification(图像分类)/
-│   │   │   │   ├── Residual Network (残差网络)/
+│   │   │   │   ├── ConvNeXt/
+│   │   │   │   │   ├── ConvNeXt.pdf
+│   │   │   │   │   ├── convnext_notes.md
+│   │   │   │   │   ├── convnext_paper_notes.md
+│   │   │   │   │   ├── convnext_supplementary.md
+│   │   │   │   │   ├── convnext_notes.assets/
+│   │   │   │   ├── Residual_Network (残差网络)/
 │   │   │   │   │   ├── resnet_cifar10.py
 │   │   │   │   │   ├── resnet_mnist.py
 │   │   │   │   │   ├── resnet_notes.md
+│   │   │   │   ├── Swin_Transformer/
+│   │   │   │   │   ├── Swin Transformer.pdf
+│   │   │   │   │   ├── swin_transformer_notes.md
+│   │   │   │   │   ├── swin_transformer_paper_notes.md
+│   │   │   │   │   ├── swin_transformer_notes.assets/
 │   │   │   │   ├── Vision_Transformer(ViT)/
 │   │   │   │   │   ├── vision_transformer_code_notes.md
 │   │   │   │   │   ├── vision_transformer_notes.md
@@ -92,24 +109,47 @@ Root: D:\AfterDownload\Data\GithubRepository\DeepLearning-notes
 │   │   │   │   │   ├── dinov2_code_notes_detailed.md
 │   │   │   │   │   ├── dinov2_notes.md
 │   │   │   ├── Semantic_Segmentation(语义分割)/
-│   │   │   │   ├── Segment Anything Model (SAM)/
+│   │   │   │   ├── DeepLabV3+/
+│   │   │   │   │   ├── Encoder-Decoder with Atrous Separable.pdf
+│   │   │   │   │   ├── deeplabv3+_notes.md
+│   │   │   │   │   ├── deeplabv3+_papers_notes.md
+│   │   │   │   │   ├── deeplabv3+_notes.assets/
+│   │   │   │   ├── Fully_Convolutional_Networks(FCN)/
+│   │   │   │   │   ├── Fully Convolutional Networks for Semantic Segmentation.pdf
+│   │   │   │   │   ├── fcn_notes.md
+│   │   │   │   │   ├── fcn_papers_notes.md
+│   │   │   │   │   ├── fcn_notes.assets/
+│   │   │   │   ├── Mask_R-CNN/
+│   │   │   │   │   ├── mask_r-cnn_notes.md
+│   │   │   │   │   ├── mask_r-cnn_notes.assets/
+│   │   │   │   │   │   ├── v2-3227fefba0df534c828dd7fa54262c67_r.jpg
+│   │   │   │   ├── Segment_Anything_Model (SAM)/
 │   │   │   │   │   ├── Segment Anything.pdf
 │   │   │   │   │   ├── sam_code_notes.md
 │   │   │   │   │   ├── sam_notes.md
 │   │   │   │   │   ├── sam_paper_notes.md
+│   │   │   │   │   ├── sam_paper_notes2(gemini-flash).md
 │   │   │   │   │   ├── Code(代码)/
 │   │   │   │   │   │   ├── create_dataset.py
 │   │   │   │   │   │   ├── sam_model.py
 │   │   │   │   │   │   ├── train_sam.py
 │   │   │   │   │   ├── sam_notes.assets/
 │   │   │   │   │   ├── sam_paper_notes.assets/
+│   │   │   │   ├── Semantic_Feature_Pyramid_Networks(SFPN)/
+│   │   │   │   │   ├── Panoptic Feature Pyramid Networks.pdf
+│   │   │   │   │   ├── sfpn_notes.md
+│   │   │   │   │   ├── sfpn_papers_notes.md
+│   │   │   │   │   ├── sfpn_notes.assets/
 │   │   │   │   ├── U-Net/
 │   │   │   │   │   ├── u-net_notes.md
 │   │   │   │   │   ├── u-net_notes.assets/
 │   │   ├── Projects_And_Experiments(项目与实验)/
+│   │   │   ├── MMPretrain/
+│   │   │   │   ├── mmpretrain - 快捷方式.lnk
+│   │   │   │   ├── mmpretrain_usage_tutorial.md
 │   │   │   ├── MMSegmentation/
 │   │   │   │   ├── mmsegmentation_usage_tutorial.md
-│   │   │   ├── TorchServe部署/
+│   │   │   ├── TorchServe/
 │   │   │   │   ├── MNIST部署/
 │   │   │   │   │   ├── TorchServe-Token.md
 │   │   │   │   │   ├── mnist-TorchServe操作步骤.md
