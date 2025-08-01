@@ -49,7 +49,8 @@ GitHub仓库：[open-mmlab/mmsegmentation: OpenMMLab Semantic Segmentation Toolb
 
    ```
    步骤 0. 使用 MIM 安装 MMCV
-   
+   激活虚拟环境，在虚拟环境里面使用：
+   conda activate open-mmlab
    pip install -U openmim
    mim install mmengine
    mim install "mmcv<2.2.0,>=2.0.0rc4"
@@ -60,6 +61,7 @@ GitHub仓库：[open-mmlab/mmsegmentation: OpenMMLab Semantic Segmentation Toolb
    git clone -b main https://github.com/open-mmlab/mmsegmentation.git
    cd mmsegmentation
    pip install -v -e .
+   pip install ftfy regex
    # '-v' 表示详细模式，更多的输出
    # '-e' 表示以可编辑模式安装工程，
    # 因此对代码所做的任何修改都生效，无需重新安装
@@ -119,7 +121,7 @@ GitHub仓库：[open-mmlab/mmsegmentation: OpenMMLab Semantic Segmentation Toolb
 我们首先创建一个 Python 脚本来凭空生成测试数据，摆脱对任何外部数据集或官方脚本的依赖。
 
 1.  **新建 `create_dummy_data.py` 文件**:
-    在 `mmsegmentation` 根目录下，创建一个名为 `create_dummy_data.py` 的文件。
+    在 `mmsegmentation` 根目录下，我们创建一个`myfiles`文件夹，然后再创建一个名为 `create_dummy_data.py` 的文件。
 
 2.  **粘贴代码**:
     将以下代码完整复制到该文件中。
@@ -190,7 +192,9 @@ GitHub仓库：[open-mmlab/mmsegmentation: OpenMMLab Semantic Segmentation Toolb
 3.  **运行脚本**:
 
     ```bash
+    cd myfiles
     python create_dummy_data.py
+    cd ..
     ```
 
 ### 第二步：下载预训练模型
@@ -202,7 +206,7 @@ GitHub仓库：[open-mmlab/mmsegmentation: OpenMMLab Semantic Segmentation Toolb
 mkdir -p checkpoints
 
 # 下载在 Cityscapes 数据集上预训练的 DeepLabV3+ 模型
-wget -P checkpoints https://download.openmmlab.com/mmsegmentation/0.5/deeplabv3plus/deeplabv3plus_r50-d8_512x1024_40k_cityscapes/deeplabv3plus_r50-d8_512x1024_40k_cityscapes_20200605_094610-d222ffcd.pth
+wget -P checkpoints https://download.openmmlab.com/mmsegmentation/v0.5/deeplabv3plus/deeplabv3plus_r50-d8_512x1024_40k_cityscapes/deeplabv3plus_r50-d8_512x1024_40k_cityscapes_20200605_094610-d222ffcd.pth
 ```
 
 ### 第三步：创建最终的配置文件
@@ -243,7 +247,7 @@ wget -P checkpoints https://download.openmmlab.com/mmsegmentation/0.5/deeplabv3p
     )
     
     # --- 2. 修改数据集信息 ---
-    data_root = 'data/dummy_dataset'
+    data_root = 'myfiles/data/dummy_dataset'
     
     train_pipeline = [
         dict(type='LoadImageFromFile'),
