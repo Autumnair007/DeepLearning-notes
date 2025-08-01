@@ -2,6 +2,8 @@
 
 论文原文：[1901.02446](https://arxiv.org/pdf/1901.02446)
 
+[[1901.02446\] Panoptic Feature Pyramid Networks](https://arxiv.org/abs/1901.02446)
+
 ------
 
 ## 摘要

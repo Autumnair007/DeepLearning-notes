@@ -2,6 +2,8 @@
 
 学习资料：[1802.02611](https://arxiv.org/pdf/1802.02611)
 
+[[1802.02611\] Encoder-Decoder with Atrous Separable Convolution for Semantic Image Segmentation](https://arxiv.org/abs/1802.02611)
+
 ------
 
 ### DeepLabV3+: Encoder-Decoder with Atrous Separable Convolution for Semantic Image Segmentation
