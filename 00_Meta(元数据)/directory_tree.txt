@@ -1,14 +1,13 @@
-Directory Tree generated on 2025-07-31 11:46:03.387093
+Directory Tree generated on 2025-08-18 10:22:29.001441
 Root: D:\AfterDownload\Data\GithubRepository\DeepLearning-notes
 
 │   ├── .gitattributes
 │   ├── LICENSE
 │   ├── README.md
-│   ├── directory_tree.py
-│   ├── directory_tree.txt
 │   ├── 深度学习.lnk
 │   ├── 00_Meta(元数据)/
 │   │   ├── directory_tree.py
+│   │   ├── directory_tree.txt
 │   │   ├── note_template.md
 │   │   ├── paper_notes_template.md
 │   │   ├── prompt.txt
@@ -109,6 +108,8 @@ Root: D:\AfterDownload\Data\GithubRepository\DeepLearning-notes
 │   │   │   │   │   ├── dinov2_code_notes_detailed.md
 │   │   │   │   │   ├── dinov2_notes.md
 │   │   │   ├── Semantic_Segmentation(语义分割)/
+│   │   │   │   ├── 图像分割模型对比.md
+│   │   │   │   ├── 图像分割模型对比表格.xlsx
 │   │   │   │   ├── DeepLabV3+/
 │   │   │   │   │   ├── Encoder-Decoder with Atrous Separable.pdf
 │   │   │   │   │   ├── deeplabv3+_notes.md
@@ -123,6 +124,11 @@ Root: D:\AfterDownload\Data\GithubRepository\DeepLearning-notes
 │   │   │   │   │   ├── mask_r-cnn_notes.md
 │   │   │   │   │   ├── mask_r-cnn_notes.assets/
 │   │   │   │   │   │   ├── v2-3227fefba0df534c828dd7fa54262c67_r.jpg
+│   │   │   │   ├── Panoptic_Feature_Pyramid_Networks(SFPN)/
+│   │   │   │   │   ├── Panoptic Feature Pyramid Networks.pdf
+│   │   │   │   │   ├── sfpn_notes.md
+│   │   │   │   │   ├── sfpn_papers_notes.md
+│   │   │   │   │   ├── sfpn_notes.assets/
 │   │   │   │   ├── Segment_Anything_Model (SAM)/
 │   │   │   │   │   ├── Segment Anything.pdf
 │   │   │   │   │   ├── sam_code_notes.md
@@ -135,14 +141,13 @@ Root: D:\AfterDownload\Data\GithubRepository\DeepLearning-notes
 │   │   │   │   │   │   ├── train_sam.py
 │   │   │   │   │   ├── sam_notes.assets/
 │   │   │   │   │   ├── sam_paper_notes.assets/
-│   │   │   │   ├── Semantic_Feature_Pyramid_Networks(SFPN)/
-│   │   │   │   │   ├── Panoptic Feature Pyramid Networks.pdf
-│   │   │   │   │   ├── sfpn_notes.md
-│   │   │   │   │   ├── sfpn_papers_notes.md
-│   │   │   │   │   ├── sfpn_notes.assets/
 │   │   │   │   ├── U-Net/
 │   │   │   │   │   ├── u-net_notes.md
 │   │   │   │   │   ├── u-net_notes.assets/
+│   │   │   │   ├── UPerNet/
+│   │   │   │   │   ├── Unifed Perceptual Parsing for Scene Understanding.pdf
+│   │   │   │   │   ├── upernet_notes.md
+│   │   │   │   │   ├── upernet_notes.assets/
 │   │   ├── Projects_And_Experiments(项目与实验)/
 │   │   │   ├── MMPretrain/
 │   │   │   │   ├── mmpretrain - 快捷方式.lnk
