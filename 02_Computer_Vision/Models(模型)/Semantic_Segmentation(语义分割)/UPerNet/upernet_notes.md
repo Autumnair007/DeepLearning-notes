@@ -2,7 +2,7 @@
 
 参考资料：[(2 封私信 / 17 条消息) 旷视科技提出统一感知解析网络UPerNet，优化场景理解 - 知乎](https://zhuanlan.zhihu.com/p/42800031)
 
-[[PPM模块讲解\] PSPNet：Pyramid Scene Parsing Network - 知乎](https://zhuanlan.zhihu.com/p/115004020)
+PPM模块讲解：[PSPNet：Pyramid Scene Parsing Network - 知乎](https://zhuanlan.zhihu.com/p/115004020)
 
 FPN详细解释：[SFPN笔记.md](../Panoptic_Feature_Pyramid_Networks(SFPN)/sfpn_notes.md)
 
@@ -156,11 +156,14 @@ PPM的唯一输入是主干网络最深层的特征图 $C_5$。选择 $C_5$ 是�
 2.  **整合特征**：$1 \times 1$ 卷积可以在不改变空间维度的前提下，对通道间的信息进行线性组合和整合。
 
 **第四步：上采样 (Upsampling)**
+
 现在，我们得到了四个经过降维的、不同空间大小的特征图（$1\times1, 2\times2, 3\times3, 6\times6$）。为了将它们融合在一起，必须先将它们的尺寸恢复到与原始输入 $C_5$ 一致。
 这一步通过**双线性插值 (Bilinear Interpolation)** 来实现。它是一种平滑的上采样方法，可以有效地将小尺寸的特征图放大，而不会产生明显的棋盘效应或伪影。
 
 **第五步：最终融合 (Final Concatenation)**
+
 这是最后一步，也是信息汇总的一步。模型会将以下所有部分在**通道维度**上进行拼接 (Concatenate)：
+
 1.  **原始输入特征图 $C_5$**：这是至关重要的一步，相当于一个“残差连接”，确保了原始的、最精细的语义信息被无损地保留下来。
 2.  **经过上采样恢复尺寸的红色分支特征图** (来自 $1 \times 1$ 池化)。
 3.  **经过上采样恢复尺寸的橙色分支特征图** (来自 $2 \times 2$ 池化)。
@@ -186,7 +189,10 @@ $$
 通过这个精心设计的流程，PPM成功地让网络在进行最终预测前，获得了一个融合了从“全局概览”到“多区域细节”的全方位上下文信息的特征表示，极大地提升了场景解析任务的性能。
 
 #### 3. 特征金字塔网络 (FPN) 解码器
+FPN详细解释可以查看这一个笔记：[SFPN笔记.md](../Panoptic_Feature_Pyramid_Networks(SFPN)/sfpn_notes.md)
+
 这是UPERNET的另一个关键部分，负责将高层的语义信息逐步地、有效地传递并融合到低层的细节特征中。
+
 *   **工作流程**：FPN构建了一个自顶向下 (Top-down) 的通路。
     
     1.  **起点**：从PPM模块的输出 $P_5$ 开始。
@@ -196,18 +202,21 @@ $$
         *   将上采样后的 $P_5$ 和处理后的 $C_4$ 进行**逐元素相加 (Element-wise Addition)**，得到新的特征图 $P_4$。
         *   重复这个过程：将 $P_4$ 上采样并与处理后的 $C_3$ 相加得到 $P_3$；将 $P_3$ 上采样并与处理后的 $C_2$ 相加得到 $P_2$。
     3.  **可选的平滑处理**：在每次相加之后，通常会接一个 $3 \times 3$ 的卷积层来平滑融合后的特征，消除上采样可能带来的混叠效应。
+    
 *   **数学表达**：
     这个自顶向下的融合过程可以表示为以下迭代公式 (对于 $i = 4, 3, 2$)：
     $$
     P_i = \text{Conv}_{3 \times 3}\left( \text{Upsample}(P_{i+1}) + \text{Conv}_{1 \times 1}(C_i) \right)
     $$
     其中：
+    
     *   $P_{i+1}$: 上一层金字塔的输出。
     *   $C_i$: 主干网络对应层的输出。
     *   $\text{Upsample}(\cdot)$: 2倍上采样。
     *   $\text{Conv}_{1 \times 1}(\cdot)$: 横向连接，用于匹配通道。
     *   $+$: 逐元素相加。
     *   $\text{Conv}_{3 \times 3}(\cdot)$: 用于平滑的卷积。
+    
     经过FPN解码器，我们得到了一系列新的特征金字塔 $\{P_2, P_3, P_4, P_5\}$。与原始的 $\{C_2, ..., C_5\}$ 相比，新的金字塔中每一层的特征图都同时富含**高层语义信息**（自顶向下传递而来）和**本层的空间细节信息**。
 #### 4. UPerNet分割头 (UPerHead) 的代码级实现细节
 在实际应用中，标准的UPerNet分割头（`UPerHead`）的实现比概念图解要更加精细和具体。以下我们将严格按照**MMSegmentation**中的源代码逻辑，来分步解析其工作流程。
@@ -303,3 +312,226 @@ $$
 2.  **强大的特征表示**：通过FPN的自顶向下路径和横向连接，模型能够在不同尺度上都产生高质量的特征表示，这对于同时分割大小物体至关重要。
 3.  **灵活性和通用性**：UPERNET是一个框架，它的主干网络可以轻松替换。你可以使用ResNet来追求效率和效果的平衡，也可以换成更强大的Swin Transformer来追求更高的精度。这使得它在学术界和工业界都得到了广泛应用。
 总而言之，UPERNET通过一个精心设计的统一框架，将PPM强大的上下文聚合能力和FPN高效的多尺度特征融合能力结合在一起，为解决复杂的场景解析问题提供了一个非常强大和有效的解决方案。
+
+### 附：MMSegmentation代码讲解
+
+#### UPerNet分割头 (UPerHead) 源码深度解析
+
+本节将严格按照MMSegmentation中的`UPerHead` Python代码，对其结构和数据流进行详细的、代码级别的剖析，揭示其在UPerNet框架中的具体作用。
+
+```python
+# Copyright (c) OpenMMLab. All rights reserved.
+import torch
+import torch.nn as nn
+from mmcv.cnn import ConvModule
+
+from mmseg.registry import MODELS
+from ..utils import resize
+from .decode_head import BaseDecodeHead
+from .psp_head import PPM
+
+
+@MODELS.register_module()
+class UPerHead(BaseDecodeHead):
+    """Unified Perceptual Parsing for Scene Understanding.
+
+    This head is the implementation of `UPerNet
+    <https://arxiv.org/abs/1807.10221>`_.
+
+    Args:
+        pool_scales (tuple[int]): Pooling scales used in Pooling Pyramid
+            Module applied on the last feature. Default: (1, 2, 3, 6).
+    """
+```
+**代码分析**:
+
+*   `@MODELS.register_module()`: 这是一个装饰器，用于将`UPerHead`这个类注册到MMSegmentation的模型注册表中。这样我们就可以通过配置文件中的字符串（如`type='UPerHead'`）来方便地创建这个模块的实例。
+*   `class UPerHead(BaseDecodeHead)`: 定义了`UPerHead`类，它继承自`BaseDecodeHead`。这个基类提供了解码头的一些通用功能，如损失计算、输入转换和分类器层(`self.cls_seg`)等。
+
+---
+### 1. `__init__` (初始化函数): 构建网络结构
+
+这个函数负责定义和初始化`UPerHead`中所有需要用到的网络层。
+
+```python
+    def __init__(self, pool_scales=(1, 2, 3, 6), **kwargs):
+        super().__init__(input_transform='multiple_select', **kwargs)
+        # PSP Module
+        self.psp_modules = PPM(
+            pool_scales,
+            self.in_channels[-1],
+            self.channels,
+            conv_cfg=self.conv_cfg,
+            norm_cfg=self.norm_cfg,
+            act_cfg=self.act_cfg,
+            align_corners=self.align_corners)
+        self.bottleneck = ConvModule(
+            self.in_channels[-1] + len(pool_scales) * self.channels,
+            self.channels,
+            3,
+            padding=1,
+            conv_cfg=self.conv_cfg,
+            norm_cfg=self.norm_cfg,
+            act_cfg=self.act_cfg)
+```
+**代码分析**:
+
+*   `super().__init__(...)`: 调用父类的初始化方法。`input_transform='multiple_select'`告诉基类，这个头需要从主干网络输出的多个特征层中选择指定的几个作为输入（通常是C2到C5）。
+*   **PSP Module部分**:
+    *   `self.psp_modules = PPM(...)`: 实例化一个金字塔池化模块。它接收`pool_scales`（如1, 2, 3, 6），顶层特征图的输入通道数`self.in_channels[-1]`（即C5的通道数），以及模块内部卷积层的输出通道数`self.channels`。
+    *   `self.bottleneck = ConvModule(...)`: 定义一个$3 \times 3$的卷积模块。这是在PPM之后使用的瓶颈层。它的输入通道数是**原始C5的通道数** (`self.in_channels[-1]`) 加上 **PPM所有分支输出的通道数总和** (`len(pool_scales) * self.channels`)。它的作用是在PPM信息融合后，进行一次特征提炼和通道降维，输出通道数为`self.channels`。
+
+```python
+        # FPN Module
+        self.lateral_convs = nn.ModuleList()
+        self.fpn_convs = nn.ModuleList()
+        for in_channels in self.in_channels[:-1]:  # skip the top layer
+            l_conv = ConvModule(
+                in_channels,
+                self.channels,
+                1,
+                conv_cfg=self.conv_cfg,
+                norm_cfg=self.norm_cfg,
+                act_cfg=self.act_cfg,
+                inplace=False)
+            fpn_conv = ConvModule(
+                self.channels,
+                self.channels,
+                3,
+                padding=1,
+                conv_cfg=self.conv_cfg,
+                norm_cfg=self.norm_cfg,
+                act_cfg=self.act_cfg,
+                inplace=False)
+            self.lateral_convs.append(l_conv)
+            self.fpn_convs.append(fpn_conv)
+```
+**代码分析**:
+*   **FPN Module部分**:
+    *   `self.lateral_convs` 和 `self.fpn_convs`: 创建两个空的模块列表，用于存储FPN的各个组件。
+    *   `for in_channels in self.in_channels[:-1]`: 循环遍历除顶层外的所有输入特征图（即C2, C3, C4）的通道数。
+    *   `l_conv = ConvModule(...)`: 定义一个$1 \times 1$的卷积模块，这是FPN的**横向连接**。它将来自主干网络的特征图（如C2）的通道数统一为解码头内部的通道数`self.channels`。
+    *   `fpn_conv = ConvModule(...)`: 定义一个$3 \times 3$的卷积模块。它在FPN的自顶向下融合（相加）**之后**被调用，用于平滑和提炼融合后的特征。
+    *   `self.lateral_convs.append(...)` 和 `self.fpn_convs.append(...)`: 将创建的卷积模块添加到相应的列表中。
+
+```python
+        self.fpn_bottleneck = ConvModule(
+            len(self.in_channels) * self.channels,
+            self.channels,
+            3,
+            padding=1,
+            conv_cfg=self.conv_cfg,
+            norm_cfg=self.norm_cfg,
+            act_cfg=self.act_cfg)
+```
+**代码分析**:
+*   `self.fpn_bottleneck`: 定义最终的瓶颈层。它的输入通道数是 `len(self.in_channels) * self.channels`，这意味着它将接收**所有4个FPN层级**（每个层级都有`self.channels`个通道）拼接后的结果。它的作用是对最终聚合的特征进行深度融合和降维。
+
+---
+### 2. `psp_forward` (前向传播函数): 处理顶层特征
+
+这是一个辅助函数，专门用于执行PPM模块及其后续瓶颈层的操作。
+
+```python
+    def psp_forward(self, inputs):
+        """Forward function of PSP module."""
+        x = inputs[-1]
+        psp_outs = [x]
+        psp_outs.extend(self.psp_modules(x))
+        psp_outs = torch.cat(psp_outs, dim=1)
+        output = self.bottleneck(psp_outs)
+
+        return output
+```
+**代码分析**:
+1.  `x = inputs[-1]`: 获取顶层特征图C5。
+2.  `psp_outs = [x]`: 创建一个列表，首先放入原始的C5。
+3.  `psp_outs.extend(self.psp_modules(x))`: 调用PPM模块，将其输出（一个包含多个不同尺度池化结果的列表）追加到`psp_outs`中。
+4.  `psp_outs = torch.cat(psp_outs, dim=1)`: 将原始C5和PPM的所有输出在通道维度上拼接起来。
+5.  `output = self.bottleneck(psp_outs)`: 将拼接后的特征送入之前定义的`bottleneck`卷积层进行处理。
+6.  `return output`: 返回经过PPM加强后的顶层特征图。
+
+---
+### 3. `_forward_feature` (前向传播函数): 核心特征融合
+
+这是`UPerHead`的核心逻辑，执行从FPN构建到最终特征聚合的完整流程。
+
+```python
+    def _forward_feature(self, inputs):
+        inputs = self._transform_inputs(inputs)
+
+        # build laterals
+        laterals = [
+            lateral_conv(inputs[i])
+            for i, lateral_conv in enumerate(self.lateral_convs)
+        ]
+        laterals.append(self.psp_forward(inputs))
+```
+**代码分析**:
+1.  `inputs = self._transform_inputs(inputs)`: 调用基类方法，确保输入是`[C2, C3, C4, C5]`的列表。
+2.  `laterals = [...]`: 使用列表推导式，将`[C2, C3, C4]`分别通过对应的`lateral_convs`（$1\times1$卷积），生成横向连接特征`[L2, L3, L4]`。
+3.  `laterals.append(self.psp_forward(inputs))`: 调用`psp_forward`处理C5，并将得到的加强版顶层特征`P5'`追加到列表末尾。此时`laterals`为`[L2, L3, L4, P5']`。
+
+```python
+        # build top-down path
+        used_backbone_levels = len(laterals)
+        for i in range(used_backbone_levels - 1, 0, -1):
+            prev_shape = laterals[i - 1].shape[2:]
+            laterals[i - 1] = laterals[i - 1] + resize(
+                laterals[i],
+                size=prev_shape,
+                mode='bilinear',
+                align_corners=self.align_corners)
+```
+**代码分析**:
+*   **构建自顶向下路径**: 这是一个从后往前的循环 (`range(3, 0, -1)`，即i=3, 2, 1)。
+*   在每次迭代中，它将高一层的特征`laterals[i]`通过`resize`函数（双线性插值）上采样到低一层特征`laterals[i-1]`的尺寸，然后进行**逐元素相加**。
+*   循环结束后，`laterals`列表中的`L2, L3, L4`都已经融合了所有比它更高层级的语义信息。
+
+```python
+        # build outputs
+        fpn_outs = [
+            self.fpn_convs[i](laterals[i])
+            for i in range(used_backbone_levels - 1)
+        ]
+        fpn_outs.append(laterals[-1])
+```
+**代码分析**:
+*   **构建输出分支**:
+*   `fpn_outs = [...]`: 使用列表推导式，将融合后的`[L2, L3, L4]`分别通过对应的`fpn_convs`（$3\times3$卷积）进行处理，得到`[F2, F3, F4]`。
+*   `fpn_outs.append(laterals[-1])`: 将顶层特征`P5'`追加到列表末尾。此时`fpn_outs`为`[F2, F3, F4, P5']`。
+
+```python
+        for i in range(used_backbone_levels - 1, 0, -1):
+            fpn_outs[i] = resize(
+                fpn_outs[i],
+                size=fpn_outs[0].shape[2:],
+                mode='bilinear',
+                align_corners=self.align_corners)
+        fpn_outs = torch.cat(fpn_outs, dim=1)
+        feats = self.fpn_bottleneck(fpn_outs)
+        return feats
+```
+**代码分析**:
+1.  **最终聚合**:
+2.  `for i in range(...)`: 再次从后往前循环，将`fpn_outs`中的所有特征图(`F3, F4, P5'`)全部上采样到与`F2`相同的尺寸（即原图1/4大小）。
+3.  `fpn_outs = torch.cat(fpn_outs, dim=1)`: 将这四个尺寸统一的特征图在通道维度上拼接。
+4.  `feats = self.fpn_bottleneck(fpn_outs)`: 将拼接后的特征送入最终的`fpn_bottleneck`卷积层，得到最终用于分类的特征图`feats`。
+5.  `return feats`: 返回这个融合了所有尺度信息的最终特征图。
+
+---
+### 4. `forward` (前向传播函数): 最终预测
+
+这是模块被外部调用时的入口函数。
+
+```python
+    def forward(self, inputs):
+        """Forward function."""
+        output = self._forward_feature(inputs)
+        output = self.cls_seg(output)
+        return output
+```
+**代码分析**:
+1.  `output = self._forward_feature(inputs)`: 调用核心的特征融合逻辑，得到特征图`feats`。
+2.  `output = self.cls_seg(output)`: 调用从基类继承的分类器（一个$1 \times 1$卷积），将特征图的通道数映射为类别数，得到最终的分割预测结果（logits）。
+3.  `return output`: 返回预测结果。后续框架会自动处理上采样和损失计算。

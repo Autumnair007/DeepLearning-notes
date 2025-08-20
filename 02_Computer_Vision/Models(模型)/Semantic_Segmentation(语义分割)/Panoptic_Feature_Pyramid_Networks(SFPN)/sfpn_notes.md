@@ -4,7 +4,7 @@
 
 [(16 条消息) 【论文笔记】FPN —— 特征金字塔 - 知乎](https://zhuanlan.zhihu.com/p/92005927)
 
-[Mask R-CNN笔记](../Mask_R-CNN/mask_r-cnn_notes)
+Mask R-CNN详细解释可以查看：[Mask R-CNN笔记](../Mask_R-CNN/mask_r-cnn_notes)
 
 ---
 
