@@ -108,10 +108,11 @@ python demo/image_demo.py \
 
 2.  **下载数据集文件**
     使用以下稳定链接将数据集下载到 `data` 目录中。
+    
     ```bash
     wget -P data http://data.brainchip.com/dataset-mirror/voc/VOCtrainval_11-May-2012.tar
     ```
-
+    
 3.  **解压数据集**
     进入 `data` 目录，解压文件，然后返回项目根目录。
     ```bash
@@ -294,8 +295,8 @@ CUDA_VISIBLE_DEVICES=6,7 ./tools/dist_train.sh configs/upernet/my_upernet_voc12.
 
 ```bash
 # 将下面的 CHECKPOINT_FILE 路径替换为你实际训练得到的模型权重文件
-# 通常在 work_dirs/my_upernet_voc12/ 目录下，文件名类似 iter_8000.pth
-CHECKPOINT_FILE="work_dirs/my_upernet_voc12/iter_8000.pth"
+# 通常在 work_dirs/my_upernet_voc12/ 目录下，文件名类似 epoch_200.pth
+CHECKPOINT_FILE="work_dirs/my_upernet_voc12/epoch_200.pth"
 CONFIG_FILE="configs/upernet/my_upernet_voc12.py"
 
 # 使用单 GPU 评估
@@ -312,7 +313,7 @@ python tools/test.py $CONFIG_FILE $CHECKPOINT_FILE
 python demo/image_demo.py \
     demo/demo.png \
     configs/upernet/my_upernet_voc12.py \
-    work_dirs/my_upernet_voc12/iter_8000.pth \
+    work_dirs/my_upernet_voc12/epoch_200.pth \
     --out-file outputs/upernet_result.jpg \
     --device cuda:7
 ```
