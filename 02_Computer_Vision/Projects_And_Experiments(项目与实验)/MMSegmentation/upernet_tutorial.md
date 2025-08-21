@@ -174,11 +174,8 @@ _base_ = [
     '../_base_/models/upernet_r50.py',
     '../_base_/datasets/pascal_voc12.py',
     '../_base_/default_runtime.py',
-    # 因为我们手动定义了训练策略，所以不再需要继承 schedule 文件
-    # '../_base_/schedules/schedule_40k.py'
 ]
 
-# 模型、数据预处理和优化器等配置保持不变
 crop_size = (512, 512)
 data_preprocessor = dict(size=crop_size)
 model = dict(
@@ -186,33 +183,39 @@ model = dict(
     decode_head=dict(num_classes=21),
     auxiliary_head=dict(num_classes=21))
 
-# 从 schedule_40k.py 复制关键配置，并修改为基于 Epoch
+# 优化器配置
 optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0005)
 optim_wrapper = dict(type='OptimWrapper', optimizer=optimizer, clip_grad=None)
 
-# 将学习率调度器由基于迭代修改为基于 Epoch
+# 学习率调度器
 param_scheduler = [
     dict(
         type='PolyLR',
         eta_min=1e-4,
         power=0.9,
         begin=0,
-        end=200,  # 结束点与总 Epoch 数一致
-        by_epoch=True) # 关键改动：将 False 改为 True
+        end=200,
+        by_epoch=True)
 ]
 
-# 将训练循环和钩子配置从基于迭代修改为基于 Epoch
+# 默认钩子
+default_hooks = dict(
+    timer=dict(type='IterTimerHook'),
+    logger=dict(type='LoggerHook', interval=50, log_metric_by_epoch=True),
+    param_scheduler=dict(type='ParamSchedulerHook'),
+    checkpoint=dict(type='CheckpointHook', by_epoch=True, interval=10),
+    sampler_seed=dict(type='DistSamplerSeedHook'),
+    visualization=dict(type='SegVisualizationHook'))
+
+# --- 新增修改：重写训练数据加载器配置 ---
+# 将采样器从默认的 InfiniteSampler 修改为 DefaultSampler，以兼容 EpochBasedTrainLoop
+train_dataloader = dict(
+    sampler=dict(type='DefaultSampler', shuffle=True))
+
+# 训练、验证和测试循环配置
 train_cfg = dict(type='EpochBasedTrainLoop', max_epochs=200, val_begin=1, val_interval=10)
 val_cfg = dict(type='ValLoop')
 test_cfg = dict(type='TestLoop')
-
-default_hooks = dict(
-    timer=dict(type='IterTimerHook'),
-    logger=dict(type='LoggerHook', interval=50, log_metric_by_epoch=True), # 关键改动：将 False 改为 True
-    param_scheduler=dict(type='ParamSchedulerHook'),
-    checkpoint=dict(type='CheckpointHook', by_epoch=True, interval=10), # 关键改动：将 False 改为 True
-    sampler_seed=dict(type='DistSamplerSeedHook'),
-    visualization=dict(type='SegVisualizationHook'))
 ```
 
 保存并退出：在 `nano` 中，按 `Ctrl+X`，然后按 `Y`，最后按 `Enter`。
@@ -221,6 +224,7 @@ default_hooks = dict(
 
 - **解耦配置**：`_base_` 的作用是将模型、数据集和训练策略等核心配置分离。通过删除 `'../_base_/schedules/schedule_40k.py'`，我们明确表示不再使用其默认的**基于迭代**的训练策略。
 - ==**从迭代到 Epoch 的转换**：==原有的 `schedule_40k.py` 文件定义了**基于 40,000 次迭代**的训练。为了实现**基于 Epoch** 的训练，我们手动复制了优化器、学习率和钩子等配置，然后将所有与“迭代”相关的参数（如 `by_epoch=False`、`log_metric_by_epoch=False`）都改为了以 **`True`** 或 **`epoch`** 为单位。
+- 除此之外，我们需要在配置文件中显式地重写（override）`train_dataloader`的配置，将采样器从 `InfiniteSampler` 改为 `DefaultSampler`。这样，训练循环才能在每个epoch结束后正确停止，从而触发checkpoint的保存。
 - **提高恢复效率**：这种修改能够从根本上解决断点恢复时需要“快进”数千次空迭代的问题，从而大大加快训练启动速度。
 
 #### 步骤 3: 开始训练
@@ -242,7 +246,7 @@ CUDA_VISIBLE_DEVICES=7 python tools/train.py configs/upernet/my_upernet_voc12.py
 如果你想用多块 GPU 进行训练，比如使用 ID 为 `0` 和 `1` 的两块显卡，只需要用逗号将它们隔开。
 
 ```bash
-CUDA_VISIBLE_DEVICES=0,1 ./tools/dist_train.sh configs/upernet/my_upernet_voc12.py 2
+CUDA_VISIBLE_DEVICES=6,7 ./tools/dist_train.sh configs/upernet/my_upernet_voc12.py 2
 ```
 
 这个命令会确保你的多 GPU 训练脚本（`dist_train.sh`）只使用 GPU `0` 和 `1`，并且启动两个进程来分别管理它们。
