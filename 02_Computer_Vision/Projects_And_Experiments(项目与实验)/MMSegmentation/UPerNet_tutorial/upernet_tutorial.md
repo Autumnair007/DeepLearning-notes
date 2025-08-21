@@ -321,3 +321,6 @@ python demo/image_demo.py \
 
 现在，去 `outputs` 文件夹下看看 `upernet_result` 吧，这正是你辛勤工作的结晶！
 
+生成的结果如下：
+
+![upernet_result](upernet_tutorial.assets/upernet_result.jpg)
