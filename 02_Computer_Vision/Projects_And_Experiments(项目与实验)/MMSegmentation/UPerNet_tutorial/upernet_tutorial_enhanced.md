@@ -258,6 +258,23 @@ CUDA_VISIBLE_DEVICES=6,7 ./tools/dist_train.sh configs/upernet/my_upernet_final_
 tmux attach -t my_training
 ```
 
+### Part 4 测试
+
+输入命令测试训练结果：
+
+```bash
+python demo/image_demo.py \
+    demo/PASCAL_VOC_2012_test.jpg \
+    configs/upernet/my_upernet_voc12.py \
+    work_dirs/my_upernet_final_voc/epoch_100.pth \
+    --out-file outputs/upernet_enhanced_result.jpg \
+    --device cuda:5
+```
+
+测试epoch_100.pth的结果如下：
+
+![upernet_enhanced_result](upernet_tutorial_enhanced.assets/upernet_enhanced_result.jpg)
+
 ### **总结**
 
 通过以上三个部分的系统性优化，你已经：
