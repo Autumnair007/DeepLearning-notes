@@ -1,4 +1,4 @@
-#  UPerNet 模型精度提升终极指南
+#  UPerNet 模型精度提升指南
 
 参考资料：[【数据集】——SBD数据集下载链接_sbd dataset-CSDN博客](https://blog.csdn.net/u011622208/article/details/131774571)
 
@@ -275,6 +275,33 @@ python demo/image_demo.py \
 
 ![upernet_enhanced_result](upernet_tutorial_enhanced.assets/upernet_enhanced_result.jpg)
 
+测试200 epochs的命令和结果如下：
+
+```bash
+python demo/image_demo.py \
+    demo/PASCAL_VOC_2012_test.jpg \
+    configs/upernet/my_upernet_voc12.py \
+    work_dirs/my_upernet_final_voc/epoch_200.pth \
+    --out-file outputs/upernet_enhanced_200_result.jpg \
+    --device cuda:5
+```
+
+![upernet_enhanced_200_result](upernet_tutorial_enhanced.assets/upernet_enhanced_200_result.jpg)
+
+测试demo图像的命令和结果：
+
+```bash
+# 运行推理
+python demo/image_demo.py \
+    demo/demo.png \
+    configs/upernet/my_upernet_voc12.py \
+    work_dirs/my_upernet_final_voc/epoch_200.pth \
+    --out-file outputs/upernet_enhanced_demo_200_result.jpg \
+    --device cuda:5
+```
+
+![upernet_enhanced_demo_200_result](upernet_tutorial_enhanced.assets/upernet_enhanced_demo_200_result.jpg)
+
 ### **总结**
 
 通过以上三个部分的系统性优化，你已经：
@@ -283,3 +310,4 @@ python demo/image_demo.py \
 3.  将学习率、训练总长等关键超参数与官方验证过的**最优实践对齐**。
 
 现在训练出的模型，其精度（mIoU）应该会有质的飞跃。祝你训练顺利，取得理想的结果！
+

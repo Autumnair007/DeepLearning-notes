@@ -315,12 +315,24 @@ python demo/image_demo.py \
     configs/upernet/my_upernet_voc12.py \
     work_dirs/my_upernet_voc12/epoch_200.pth \
     --out-file outputs/upernet_result.jpg \
-    --device cuda:7
+    --device cuda:5
 ```
 `work_dirs/my_upernet_voc12/iter_8000.pth \`：这里需要修改加载的权重文件的名字。
-
-现在，去 `outputs` 文件夹下看看 `upernet_result` 吧，这正是你辛勤工作的结晶！
 
 生成的结果如下：
 
 ![upernet_result](upernet_tutorial.assets/upernet_result.jpg)
+
+测试结果2：
+
+```bash
+# 运行推理
+python demo/image_demo.py \
+    demo/PASCAL_VOC_2012_test.jpg \
+    configs/upernet/my_upernet_voc12.py \
+    work_dirs/my_upernet_voc12/epoch_200.pth \
+    --out-file outputs/upernet_no_enhanced_200_result.jpg \
+    --device cuda:5
+```
+
+![upernet_no_enhanced_200_result](upernet_tutorial.assets/upernet_no_enhanced_200_result.jpg)
