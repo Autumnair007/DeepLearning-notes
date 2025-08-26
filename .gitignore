@@ -1,0 +1,6 @@
+# 忽略 .obsidian 文件夹
+.obsidian/
+
+# 忽略名为“深度学习”的快捷方式文件
+深度学习.lnk
+03_Natural_Language_Processing/Natural_Language_Processing_Theory(自然语言处理理论)/multi_head_attention_self_attention_and_positional_encoding_notes(多头注意力、自注意力与位置编码笔记).md
