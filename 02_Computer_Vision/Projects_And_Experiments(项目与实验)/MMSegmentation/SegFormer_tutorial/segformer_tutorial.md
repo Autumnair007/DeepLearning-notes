@@ -98,10 +98,10 @@ touch configs/segformer/my_segformer_mit-b2_3xb6-200e_voc12aug-512x512.py
 # =========================================================================
 #
 #        SegFormer-MiT-B2 在 PASCAL VOC 2012 增强数据集上的
-#                      终极训练配置文件 (性能优化版)
+#                      终极训练配置文件 (3-Epoch 测试版)
 #
 # 作者: Autumnair007 & Copilot
-# 日期: 2025-08-25
+# 日期: 2025-08-26 (Epoch-based 修正版)
 #
 # =========================================================================
 
@@ -114,11 +114,12 @@ _base_ = [
 
 # --- 第 2 部分: 硬件与训练超参数 (性能优化) ---
 gpu_count = 3
-# 【性能优化】将每卡批量大小提升至 6，以充分利用 2080Ti 显存
 samples_per_gpu = 6
-num_workers = 16
+num_workers = 8
 learning_rate = 0.00006
-max_epochs = 200
+checkpoint_epoch = 10 # 每隔多少 epoch 保存一次模型
+val_epoch = 10    # 每隔多少 epoch 进行一次验证
+max_epochs = 200 # 总训练 epoch 数
 
 # --- 第 3 部分: 模型配置 ---
 crop_size = (512, 512)
@@ -137,8 +138,15 @@ model = dict(
 )
 
 # --- 第 4 部分: 数据加载器 (Dataloader) 配置 ---
-train_dataloader = dict(batch_size=samples_per_gpu, num_workers=num_workers)
-val_dataloader = dict(batch_size=1, num_workers=num_workers)
+train_dataloader = dict(
+    batch_size=samples_per_gpu,
+    num_workers=num_workers,
+    sampler=dict(type='DefaultSampler', shuffle=True))
+
+val_dataloader = dict(
+    batch_size=1,
+    num_workers=num_workers,
+    sampler=dict(type='DefaultSampler', shuffle=False))
 test_dataloader = val_dataloader
 
 # --- 第 5 部分: 优化器与学习率策略 ---
@@ -154,18 +162,24 @@ optim_wrapper = dict(
             'head': dict(lr_mult=10.)
         }))
 
-# 【自动适配】总迭代次数会根据新的 batch_size 自动重新计算
-total_iters = max_epochs * (10582 // (samples_per_gpu * gpu_count))
+# 【关键修正】学习率调度器现在完全基于 Epoch
+# 注意：end 值现在由 max_epochs 自动控制
 param_scheduler = [
     dict(
-        type='LinearLR', start_factor=1e-6, by_epoch=False, begin=0, end=1500),
+        type='LinearLR',
+        start_factor=1e-6,
+        by_epoch=True,
+        begin=0,
+        # Warmup 阶段可以适当缩短以适应短时训练
+        end=1,
+    ),
     dict(
         type='PolyLR',
         eta_min=0.0,
         power=1.0,
-        begin=1500,
-        end=total_iters,
-        by_epoch=False,
+        by_epoch=True,
+        begin=1,
+        end=max_epochs + 1, # 这里的 end 应该略大于 max_epochs，以确保最后一个 epoch 的学习率计算正确
     )
 ]
 
@@ -173,10 +187,10 @@ param_scheduler = [
 train_cfg = dict(
     type='EpochBasedTrainLoop',
     max_epochs=max_epochs,
-    val_interval=10)
+    val_interval=val_epoch)
+
 val_cfg = dict(type='ValLoop')
 test_cfg = dict(type='TestLoop')
-
 
 # --- 第 7 部分: 钩子 (Hooks) 与最终可视化配置 ---
 default_hooks = dict(
@@ -186,13 +200,14 @@ default_hooks = dict(
     checkpoint=dict(
         type='CheckpointHook',
         by_epoch=True,
-        interval=10,
+        interval= checkpoint_epoch,
         max_keep_ckpts=3,
         save_best='mIoU',
         rule='greater'),
     sampler_seed=dict(type='DistSamplerSeedHook'),
     visualization=dict(type='SegVisualizationHook'))
 
+# 可视化后端配置
 vis_backends = [
     dict(type='LocalVisBackend'),
     dict(type='TensorboardVisBackend')
