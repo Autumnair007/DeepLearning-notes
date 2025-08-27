@@ -98,10 +98,10 @@ touch configs/segformer/my_segformer_mit-b2_3xb6-200e_voc12aug-512x512.py
 # =========================================================================
 #
 #        SegFormer-MiT-B2 在 PASCAL VOC 2012 增强数据集上的
-#                      终极训练配置文件 (3-Epoch 测试版)
+#          终极训练配置文件 (v2.1 - 学习率与结束点双重修正版)
 #
 # 作者: Autumnair007 & Copilot
-# 日期: 2025-08-26 (Epoch-based 修正版)
+# 日期: 2025-08-27 (采纳用户关于 scheduler end point 的优化建议)
 #
 # =========================================================================
 
@@ -119,7 +119,8 @@ num_workers = 8
 learning_rate = 0.00006
 checkpoint_epoch = 10 # 每隔多少 epoch 保存一次模型
 val_epoch = 10    # 每隔多少 epoch 进行一次验证
-max_epochs = 200 # 总训练 epoch 数
+max_epochs = 200 
+warmup_epochs = 15
 
 # --- 第 3 部分: 模型配置 ---
 crop_size = (512, 512)
@@ -162,24 +163,27 @@ optim_wrapper = dict(
             'head': dict(lr_mult=10.)
         }))
 
-# 【关键修正】学习率调度器现在完全基于 Epoch
-# 注意：end 值现在由 max_epochs 自动控制
+# =========================================================================
+# 【关键修正】学习率调度器现在使用更合理的 Warmup 周期和更严谨的结束点
+# =========================================================================
 param_scheduler = [
     dict(
         type='LinearLR',
         start_factor=1e-6,
         by_epoch=True,
         begin=0,
-        # Warmup 阶段可以适当缩短以适应短时训练
-        end=1,
+        # Warmup 阶段延长至 15 个 Epochs，让模型充分预热
+        end=warmup_epochs,
     ),
     dict(
         type='PolyLR',
         eta_min=0.0,
         power=1.0,
         by_epoch=True,
-        begin=1,
-        end=max_epochs + 1, # 这里的 end 应该略大于 max_epochs，以确保最后一个 epoch 的学习率计算正确
+        # 在 Warmup 结束后 (第 15 个 epoch 之后) 再开始学习率衰减
+        begin=warmup_epochs,
+        # 【采纳建议】设置为 max_epochs + 1，确保最后一个 epoch 的衰减逻辑严谨无误
+        end=max_epochs + 1,
     )
 ]
 
