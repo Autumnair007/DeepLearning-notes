@@ -269,22 +269,97 @@ CUDA_VISIBLE_DEVICES=5,6,7 ./tools/dist_train.sh configs/segformer/my_segformer_
 训练完成后，对你的模型进行最终的检验。所有命令都已更新为使用新的配置文件和工作目录。
 
 #### 步骤 1: 评估模型性能
+
+**可能会发生的错误**
+
+从你提供的日志最后部分的 `Traceback` 来看，错误的核心在于这一行：
+
+```
+AttributeError: module 'PIL.Image' has no attribute 'ANTIALIAS'
+```
+
+**错误原因**：
+
+这个错误表示在 `PIL`（或其替代品 `Pillow`）库的 `Image` 模块中找不到 `ANTIALIAS` 这个属性。
+
+1.  **Pillow 版本过高**：`Image.ANTIALIAS` 在 `Pillow` 10.0.0 版本中被废弃并移除。取而代之的是 `Image.Resampling.LANCZOS` 或者 `Image.LANCZOS`。
+2.  **依赖冲突**：你环境中安装的 `torch` 或 `torchvision` 版本可能依赖于一个旧的 `Pillow` 版本，但现在你环境中的 `Pillow` 版本太新了，导致 `torchvision` 或 `tensorboard` 内部的代码调用了已经被移除的属性。
+
+从错误堆栈中可以看到，问题发生在 `torch/utils/tensorboard/summary.py` 文件调用 `Image.ANTIALIAS` 时。这说明你环境中的 `tensorboard`（作为 `PyTorch` 的一部分）期望使用一个较旧版本的 `Pillow`。
+
+**解决方案**
+
+最直接和推荐的解决方案是**降级 Pillow 库的版本**，使其与你环境中其他库（特别是 `PyTorch 1.10.1`）兼容。请在你的 `open-mmlab` conda 环境中执行以下命令：
+
+```bash
+pip install Pillow==9.5.0
+```
+
 我们优先使用**最优模型**进行评估。
 ```bash
 CONFIG_FILE="configs/segformer/my_segformer_mit-b2_3xb6-200e_voc12aug-512x512.py"
 # 【注意】工作目录名会根据配置文件名自动改变
-CHECKPOINT_FILE="work_dirs/my_segformer_mit-b2_3xb6-200e_voc12aug-512x512/best_mIoU_epoch_XXX.pth"
+CHECKPOINT_FILE="work_dirs/my_segformer_mit-b2_3xb6-200e_voc12aug-512x512/best_mIoU_epoch_200.pth"
 
 CUDA_VISIBLE_DEVICES=4 python tools/test.py $CONFIG_FILE $CHECKPOINT_FILE --show-dir outputs/test_results_b6
 ```
 
+评估结果如下：
+
+```bash
++-------------+-------+-------+
+|    Class    |  IoU  |  Acc  |
++-------------+-------+-------+
+|  background | 90.23 | 95.79 |
+|  aeroplane  | 74.78 | 83.51 |
+|   bicycle   | 32.35 | 76.72 |
+|     bird    | 67.08 | 80.48 |
+|     boat    | 51.21 | 64.39 |
+|    bottle   | 42.44 | 48.06 |
+|     bus     | 80.75 | 85.15 |
+|     car     | 70.96 | 85.67 |
+|     cat     | 70.84 | 80.85 |
+|    chair    | 25.53 | 38.86 |
+|     cow     | 61.07 |  71.8 |
+| diningtable | 37.51 | 42.36 |
+|     dog     | 60.29 |  81.7 |
+|    horse    | 59.67 | 72.09 |
+|  motorbike  | 67.64 | 78.69 |
+|    person   | 70.57 | 85.21 |
+| pottedplant | 41.16 | 48.25 |
+|    sheep    | 73.58 | 81.71 |
+|     sofa    | 29.73 | 36.48 |
+|    train    | 74.72 | 83.38 |
+|  tvmonitor  | 48.46 | 58.68 |
++-------------+-------+-------+
+2025/08/28 11:27:37 - mmengine - INFO - Iter(test) [1449/1449]    aAcc: 89.9100  mIoU: 58.6000  mAcc: 70.4700  data_time: 0.8346  time: 0.9140
+```
+
 #### 步骤 2: 对单张图片进行可视化推理
+
 同样使用最优模型，在**第 4 号 GPU** 上对任意一张图片进行测试。
 ```bash
 python demo/image_demo.py \
     demo/demo.png \
     configs/segformer/my_segformer_mit-b2_3xb6-200e_voc12aug-512x512.py \
-    work_dirs/my_segformer_mit-b2_3xb6-200e_voc12aug-512x512/best_mIoU_epoch_XXX.pth \
+    work_dirs/my_segformer_mit-b2_3xb6-200e_voc12aug-512x512/best_mIoU_epoch_200.pth \
     --out-file outputs/my_segformer_best_result_b6.jpg \
     --device cuda:4
 ```
+
+这是训练结果：
+
+![my_segformer_best_result_b6](segformer_tutorial.assets/my_segformer_best_result_b6.jpg)
+
+```bash
+python demo/image_demo.py \
+    demo/PASCAL_VOC_2012_test.jpg \
+    configs/segformer/my_segformer_mit-b2_3xb6-200e_voc12aug-512x512.py \
+    work_dirs/my_segformer_mit-b2_3xb6-200e_voc12aug-512x512/best_mIoU_epoch_200.pth \
+    --out-file outputs/my_segformer_best_result_b6_PASCAL_VOC.jpg \
+    --device cuda:4
+```
+
+这是测试的结果
+
+![my_segformer_best_result_b6_PASCAL_VOC](segformer_tutorial.assets/my_segformer_best_result_b6_PASCAL_VOC.jpg)
