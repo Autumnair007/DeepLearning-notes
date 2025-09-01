@@ -255,6 +255,7 @@ CUDA_VISIBLE_DEVICES=5,6,7 ./tools/dist_train.sh configs/segformer/my_segformer_
 4. **从你的电脑访问仪表盘**: 点击“在浏览器中打开”图标或访问 `http://localhost:6006/`。
 
 #### 步骤 4: 管理你的训练会话
+
 * **重新连接 (查看进度)**: `tmux attach -t seg_train_b6`
 * **从断点恢复训练**:
   ```bash

@@ -371,6 +371,47 @@
 2.  **mIoU 曲线超越 V1**：我们强烈预期，这个最终版的 V2 mIoU 曲线将稳步爬升，并最终**显著超越 58.6%** 的瓶颈，达到新的高度。
 3.  **更高质量的分割结果**：训练完成后，评估最终模型时，不仅要看 IoU 数值，还要在 `--show-dir` 的输出中观察分割掩码的**视觉质量**。我们期望物体的边缘更平滑，内部空洞更少，整体形状更完整。
 
+#### 第五阶段：评估模型
+
+```bash
+CONFIG_FILE="configs/segformer/my_segformer_mit-b2_3xb6-200e_voc12aug_v2-advanced-training.py"
+# 【注意】工作目录名会根据配置文件名自动改变
+CHECKPOINT_FILE="work_dirs/my_segformer_mit-b2_3xb6-200e_voc12aug_v2-advanced-training/best_mIoU_epoch_200.pth"
+
+CUDA_VISIBLE_DEVICES=4 python tools/test.py $CONFIG_FILE $CHECKPOINT_FILE --show-dir outputs/test_results_b6
+```
+
+评估结果如下：
+
+```bash
++-------------+-------+-------+
+|    Class    |  IoU  |  Acc  |
++-------------+-------+-------+
+|  background | 90.91 | 95.64 |
+|  aeroplane  | 76.72 | 84.42 |
+|   bicycle   | 33.19 | 78.89 |
+|     bird    | 62.78 | 78.15 |
+|     boat    | 50.51 | 68.14 |
+|    bottle   | 45.73 | 51.67 |
+|     bus     | 83.38 | 87.77 |
+|     car     | 75.07 | 87.24 |
+|     cat     | 71.55 |  85.8 |
+|    chair    | 21.77 | 35.09 |
+|     cow     |  66.1 | 77.49 |
+| diningtable | 36.68 | 45.01 |
+|     dog     |  58.8 | 77.36 |
+|    horse    | 57.56 | 69.42 |
+|  motorbike  | 68.21 | 81.27 |
+|    person   | 72.96 |  86.5 |
+| pottedplant | 39.86 | 50.32 |
+|    sheep    | 68.02 | 82.05 |
+|     sofa    | 33.97 | 44.23 |
+|    train    | 76.77 | 83.85 |
+|  tvmonitor  | 55.46 |  66.9 |
++-------------+-------+-------+
+09/01 10:31:45 - mmengine - INFO - Iter(test) [1449/1449]    aAcc: 90.2600  mIoU: 59.3300  mAcc: 72.2500  data_time: 0.8344  time: 0.9136
+```
+
 ### **总结与后续步骤**
 
 V2 的实验历程是一个完美的闭环：**提出假设 -> 实验验证 -> 遭遇失败 -> 分析根因 -> 修正并升级方案 -> 再次验证**。这次的失败不仅不是弯路，反而是通往 SOTA 级方案的宝贵阶梯。
