@@ -1,4 +1,4 @@
-# Segformer 实验增强版 V2：完整优化纪实
+# Segformer 实验增强版 V2
 
 参考资料：[类别不平衡](../../../Computer_Vision_Theory(计算机视觉理论)/Basic_Knowledge_of_Image_Segmentation/class_imbalance(类别不平衡).md)
 
@@ -806,3 +806,149 @@ visualizer = dict(
     *   `type='SegLocalVisualizer'`: 使用 MMSegmentation 专为分割任务设计的本地可视化工具。
     *   `vis_backends=vis_backends`: 指定使用上面定义的 `Local` 和 `Tensorboard` 两个后端。
     *   `name='visualizer'`: 为这个可视化器命名。
+
+***
+
+## 代码中不理解的点：
+
+### 总结目录
+
+1.  **Crop Size： 图像裁剪尺寸**
+2.  **`dict()` 函数： 创建配置字典**
+3.  **嵌套字典： 声明式层级配置**
+4.  **`type` 键： 配置的灵魂与自动化构建的钥匙**
+
+---
+
+### 1. Crop Size： 图像裁剪尺寸
+
+**是什么？**
+`crop_size` 是一个指定图像**裁剪后目标尺寸**的参数，通常是一个整数（如 `224`）或一个元组（如 `(512, 512)`）。
+
+**为什么需要？**
+
+*   **统一输入：** 神经网络需要固定尺寸的输入张量（如 `[Batch, Channel, Height, Width]`）。
+*   **数据增强：** 在训练时对图像进行**随机裁剪**，可以强迫模型学习物体的不同部位和背景，极大增强模型泛化能力，防止过拟合。
+*   **降低计算成本：** 处理小图像比处理高分辨率原图更快，更省内存。
+
+**如何使用？**
+*   **训练阶段 (Training):** 通常使用 **`RandomResizedCrop`**，即先随机缩放图像，再随机裁剪到 `crop_size`。这是数据增强的核心。
+*   **测试阶段 (Validation/Test):** 通常使用 **`CenterCrop`**，即先将图像缩放到一个合理大小，再从中心裁剪到 `crop_size`。这保证了评估结果的可重现性。
+
+**Python 语法注意：**
+`crop_size = 224` 和 `crop_size = (224, 224)` 在大多数情况下是等价的，框架会将其统一处理为高和宽相同的尺寸。
+
+---
+
+### 2. `dict()` 函数： 创建配置字典
+
+**是什么？**
+`dict()` 是 Python 的**内置函数**，用于创建一个**字典（Dictionary）** 对象。字典是一种存储 **键值对（Key-Value Pair）** 的数据结构。
+
+**语法：**
+
+```python
+# 方法一：使用 dict() 函数
+my_dict = dict(key1=value1, key2=value2, keyN=valueN)
+# 方法二：使用花括号 {}
+my_dict = {'key1': value1, 'key2': value2, 'keyN': valueN}
+# 两种方法效果完全相同
+```
+
+**在框架中的用法：**
+在深度学习配置中，`dict(size=crop_size)` 创建了一个字典，它包含一个配置项：键 `'size'` 的值是变量 `crop_size` 的值。这个字典作为更大配置的一部分，用来告诉数据预处理器应该把图像处理成多大。
+
+**为什么用 `dict()` 而不是 `{}`？**
+这主要是**代码风格和可读性**的偏好。在冗长的配置中，`dict(key=value)` 的写法无需给键加引号，看起来更清晰，更像是在传递参数，与深度学习框架“配置化”的理念非常契合。
+
+---
+
+### 3. 嵌套字典： 声明式层级配置
+
+**是什么？**
+“字典套字典”是指一个字典的值本身又是另一个字典，从而形成一种**树状**或**层级化**的数据结构。
+
+**示例代码：**
+
+```python
+model_cfg = dict(
+    backbone=dict( # 第一层嵌套：backbone 的值是一个字典
+        type='ResNet',
+        depth=50,
+        init_cfg=dict( # 第二层嵌套：init_cfg 的值又是一个字典
+            type='Pretrained',
+            checkpoint='path/to/ckpt.pth'
+        )
+    ),
+    head=dict(...) # 另一个第一层嵌套
+)
+```
+
+**框架设计思想：声明式编程 (Declarative Programming)**
+这种结构体现了**声明式**而非**命令式**的编程思想。
+
+*   **命令式 (How)：** 关注“如何做”，是一步步的指令。
+    
+    ```python
+    # （伪代码）命令式的例子
+    backbone = ResNet(depth=50)
+    load_pretrained_weights(backbone, 'path/to/ckpt.pth')
+    model = Model(backbone, head)
+    ```
+*   **声明式 (What)：** 关注“做什么”，只描述最终状态和需求。
+    
+    ```python
+    # 声明式的例子（就是我们的配置）
+    model_cfg = dict(
+        backbone=dict(type='ResNet', depth=50, init_cfg=dict(type='Pretrained', ...)),
+        ...
+    )
+    ```
+    **优势：**
+    1.  **解耦：** 配置与代码分离。换模型（如 ResNet -> SwinTransformer）只需改配置，无需动代码。
+    2.  **可读性：** 所有设置一目了然，结构清晰。
+    3.  **可重现：** 一份配置文件完整定义了整个实验，便于分享和复现。
+
+---
+
+### 4. `type` 键： 配置的灵魂与自动化构建的钥匙
+
+**是什么？**
+`type` 是嵌套字典中的一个**特殊键**。它的值是一个**字符串**，这个字符串对应着框架中某个**已注册的类**的名字。
+
+**如何工作？（框架的魔法：注册器 Registry）**
+
+1.  **注册：** 框架开发者用装饰器将类注册到一个“仓库”里。
+    
+    ```python
+    @MODELS.register_module() # 把这个类注册到MODELS仓库
+    class MyAwesomeLoss(nn.Module):
+        def __init__(self, param1, param2):
+            ...
+    ```
+    注册后，框架就可以通过字符串 `'MyAwesomeLoss'` 找到这个类。
+    
+2.  **构建：** 框架有一个通用的**构建器（Builder）** 函数。当它读到配置时：
+    ```python
+    cfg = dict(type='MyAwesomeLoss', param1=100, param2=200)
+    ```
+    它会：
+    *   根据 `type` 的值 `'MyAwesomeLoss'`，去注册器里找到对应的 `MyAwesomeLoss` 类。
+    *   将字典里剩下的所有参数（`param1=100, param2=200`）解包，传给该类的构造函数：`MyAwesomeLoss(param1=100, param2=200)`。
+    *   返回创建好的实例。
+
+**为什么是核心？**
+
+*   **它是连接“字符串配置”和“Python类”的桥梁**。没有它，配置就只是一堆死数据，无法自动转换成复杂的程序对象。
+*   **它实现了高度的灵活性和可扩展性**。你可以自定义任何模块（如损失函数、网络层），只要注册它，就可以在配置文件中用 `type` 轻松调用。
+
+### 最终总结
+
+整个系统就像一个自动化工厂：
+
+1.  **`crop_size`** 等参数是规定产品规格的 **“数字参数”**。
+2.  **`dict()`** 创建的嵌套字典是一份 **“JSON 格式的图纸”**，描述了产品的层次化结构。
+3.  **`type`** 是图纸上的 **“零件型号”**。
+4.  **框架的注册和构建机制**是工厂的 **“万能机床和零件仓库”**。机床读取图纸，根据“零件型号”（`type`）从仓库里找到对应的零件模具（类），再按照图纸上的数字参数（其他键值对）加工出零件（实例），最后自动组装成最终产品（模型）。
+
+这种设计使得深度学习研究和开发变得极其模块化、可配置化和工程化，是现代深度学习框架强大和流行的基石。
