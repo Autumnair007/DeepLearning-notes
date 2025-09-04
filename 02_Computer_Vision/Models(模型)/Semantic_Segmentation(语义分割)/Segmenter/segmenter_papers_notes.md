@@ -105,12 +105,22 @@ $$
 
 #### 4.3. 消融研究 (Ablation study)
 
-*   **正则化 (Regularization)**：对比了dropout和随机深度（stochastic depth）两种正则化方式。结果显示，随机深度能持续改善Transformer在分割任务上的训练效果，而dropout则会降低性能。这与DeiT在图像分类中观察到的结果一致。因此，后续所有模型均采用0.1的随机深度，不使用dropout。
-*   **Transformer尺寸 (Transformer size)**：通过改变层数和token大小来研究Transformer尺寸对性能的影响。结果表明，性能随骨干网络容量的增加而线性增长。当token维度加倍或层数加倍时，mIoU均有显著提升。最大的Segmenter模型Seg-L/16在ADE20K验证集上达到了50.71%的mIoU，这表明Transformer模型比FCN更具表达能力。
-*   **Patch尺寸 (Patch size)**：这是一个关键因素。减小patch尺寸能显著提升性能，例如Seg-B从32x32到16x16，提升了5%。8x8的patch尺寸性能更好，但计算成本更高。图3直观展示了patch尺寸对分割图的影响，小patch尺寸能生成更锐利的边界和更精细的对象分割。表4进一步分析了不同patch尺寸对大小物体的表现，发现小patch尺寸（如8x8）在小型和中型实例上带来显著增益，而Segmenter相比DeepLab在大型实例上表现出更大的优势。
-*   **解码器变体 (Decoder variants)**：比较了线性解码器和Mask Transformer。Mask Transformer始终优于线性基线，尤其是在大型对象上。这得益于其生成动态滤波器的能力。并且，Mask Transformer学习到的类嵌入具有语义意义，相似的类别在嵌入空间中也靠近（见图8）。
-*   **Transformer vs. FCN (Transformer versus FCN)**：表4和表6对比了Segmenter与DeepLabv3+等FCN模型的性能。Transformer模型在全局场景理解方面表现出优势，尤其是在大型实例上。但在小型和中型实例上的表现与DeepLab相当。
-*   **性能 (Performance)**：图4展示了Segmenter在mIoU和每秒图像处理数（计算效率）方面的优势。Segmenter在精度和速度之间提供了有竞争力的权衡。Seg/16模型在精度-计算时间方面表现最佳。Seg-B-Mask/16在推理速度与FCN相当的同时，性能优于FCN，并与SETR-MLA相当但速度更快。Seg/32模型虽然分割粒度更粗，但推理速度非常快。
+* **正则化 (Regularization)**：对比了dropout和随机深度（stochastic depth）两种正则化方式。结果显示，随机深度能持续改善Transformer在分割任务上的训练效果，而dropout则会降低性能。这与DeiT在图像分类中观察到的结果一致。因此，后续所有模型均采用0.1的随机深度，不使用dropout。
+
+* **Transformer尺寸 (Transformer size)**：通过改变层数和token大小来研究Transformer尺寸对性能的影响。结果表明，性能随骨干网络容量的增加而线性增长。当token维度加倍或层数加倍时，mIoU均有显著提升。最大的Segmenter模型Seg-L/16在ADE20K验证集上达到了50.71%的mIoU，这表明Transformer模型比FCN更具表达能力。
+
+* **Patch尺寸 (Patch size)**：这是一个关键因素。减小patch尺寸能显著提升性能，例如Seg-B从32x32到16x16，提升了5%。8x8的patch尺寸性能更好，但计算成本更高。图3直观展示了patch尺寸对分割图的影响，小patch尺寸能生成更锐利的边界和更精细的对象分割。表4进一步分析了不同patch尺寸对大小物体的表现，发现小patch尺寸（如8x8）在小型和中型实例上带来显著增益，而Segmenter相比DeepLab在大型实例上表现出更大的优势。
+
+  ![4fc8fc94ae27a2242bf4da17ad77d52e](segmenter_papers_notes.assets/4fc8fc94ae27a2242bf4da17ad77d52e.png)
+
+* **解码器变体 (Decoder variants)**：比较了线性解码器和Mask Transformer。Mask Transformer始终优于线性基线，尤其是在大型对象上。这得益于其生成动态滤波器的能力。并且，Mask Transformer学习到的类嵌入具有语义意义，相似的类别在嵌入空间中也靠近（见图8）。
+
+* **Transformer vs. FCN (Transformer versus FCN)**：表4和表6对比了Segmenter与DeepLabv3+等FCN模型的性能。Transformer模型在全局场景理解方面表现出优势，尤其是在大型实例上。但在小型和中型实例上的表现与DeepLab相当。
+
+* **性能 (Performance)**：图4展示了Segmenter在mIoU和每秒图像处理数（计算效率）方面的优势。Segmenter在精度和速度之间提供了有竞争力的权衡。Seg/16模型在精度-计算时间方面表现最佳。Seg-B-Mask/16在推理速度与FCN相当的同时，性能优于FCN，并与SETR-MLA相当但速度更快。Seg/32模型虽然分割粒度更粗，但推理速度非常快。
+
+  ![68de1b92f4383e26cf764e6a88aff0dc](segmenter_papers_notes.assets/68de1b92f4383e26cf764e6a88aff0dc.png)
+
 *   **数据集大小 (Dataset size)**：研究了训练数据集大小对性能的影响。结果表明，即使在微调阶段，足够大的数据集（例如ADE20K上高于8k张图像）对于Transformer模型取得良好性能仍然至关重要。
 
 #### 4.4. 与现有技术水平的比较 (Comparison with state of the art)

@@ -58,10 +58,50 @@ $$
     
     *   **Q, K, V 的生成**：对于输入序列 $Z_{in} \in \mathbb{R}^{N \times D}$ (即 $\text{LN}(z^{i-1})$)，MSA模块首先通过三个独立的可学习线性变换（即三个全连接层，权重分别为 $W_Q, W_K, W_V$）将其投影到三个不同的空间，得到查询（Query）、键（Key）和值（Value）矩阵：$Q = Z_{in}W_Q$, $K = Z_{in}W_K$, $V = Z_{in}W_V$。这三个矩阵的维度通常是 $\mathbb{R}^{N \times d}$，其中 $d$ 是每个注意力头的维度。
     *   **注意力计算**：其核心是缩放点积注意力（Scaled Dot-Product Attention）。$Q$ 和 $K$ 的矩阵乘法 $QK^T$ 计算了序列中每个token的“查询”与所有token的“键”之间的原始相似度分数。$\sqrt{d}$ 是一个缩放因子，用于稳定梯度，防止点积结果过大导致 softmax 函数进入饱和区。Softmax 函数将分数归一化为注意力权重，这些权重表示每个查询应该从各个值中提取多少信息。最后，将权重矩阵与 $V$ 相乘，得到加权后的特征。
+    
     $$
     \text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d}}\right)V
     $$
+    
     *   **“多头”机制**：该过程会并行地进行多次（例如 $h$ 次，即 $h$ 个头）。每个头都有自己独立的 $W_Q, W_K, W_V$ 权重矩阵，可以从不同的表示子空间学习信息。最后，所有 $h$ 个头的输出结果被拼接（concatenate）起来，并通过另一次线性变换投影回原始的 $D$ 维空间。这使得模型能够高效地捕捉图像范围内的多种依赖关系。
+    
+    *   **详细的数学解释**：我们来拆解这个过程。假设输入序列包含 $N$ 个 token，每个 token 的 embedding 是一个行向量 $z_i \in \mathbb{R}^{1 \times D}$。对于单个注意力头，我们有权重矩阵 $W_Q, W_K, W_V \in \mathbb{R}^{D \times d}$。
+        
+        1.  **生成 Q, K, V 向量**：对序列中的每一个 token $z_i$（$i=1, \dots, N$），我们都生成其对应的查询、键、值向量：$q_i = z_i W_Q$, $k_i = z_i W_K$, $v_i = z_i W_V$。每个向量都是 $1 \times d$ 维的。
+        2.  **计算注意力分数**：为了更新第 $i$ 个 token 的表示，我们用它的查询向量 $q_i$ 与**所有** token 的键向量 $k_j$（$j=1, \dots, N$）进行点积运算，得到一个标量“注意力分数” $e_{ij} = q_i \cdot k_j^T$。这个分数衡量了第 $i$ 个 token 对第 $j$ 个 token 的“关注程度”。
+        3.  **形成分数矩阵**：将所有这些分数汇集起来，就形成了一个注意力分数矩阵 $E \in \mathbb{R}^{N \times N}$，其中 $E_{ij} = q_i k_j^T$。这在宏观上等价于 $E = QK^T$。
+        4.  **缩放与归一化**：将分数矩阵 $E$ 的每个元素都除以缩放因子 $\sqrt{d}$，然后对矩阵的每一行独立地应用 Softmax 函数。对于第 $i$ 行，我们得到注意力权重向量 $\alpha_i = [\alpha_{i1}, \dots, \alpha_{iN}] = \text{softmax}([e_{i1}/\sqrt{d}, \dots, e_{iN}/\sqrt{d}])$。其中 $\sum_{j=1}^{N} \alpha_{ij} = 1$。
+        5.  **加权求和**：最后，第 $i$ 个 token 的新表示 $z'_i \in \mathbb{R}^{1 \times d}$ 是所有 token 的值向量 $v_j$ 的加权和，权重就是刚算出的 $\alpha_{ij}$。
+        
+        $$
+        z'_i = \sum_{j=1}^{N} \alpha_{ij} v_j
+        $$
+        
+        这在宏观上对应于最终的矩阵运算：$Z' = \text{softmax}\left(\frac{QK^T}{\sqrt{d}}\right)V$，其中 $Z'$ 的第 $i$ 行就是 $z'_i$。
+        
+    *   **一个具体的计算示例**：假设我们有一个极简的序列，包含2个 token（$N=2$）。输入 embedding 维度为4（$D=4$），单个注意力头的维度为3（$d=3$）。
+        
+        *   **输入**：$Z_{in} = \begin{pmatrix} 1 & 0 & 1 & 0 \\ 0 & 1 & 0 & 1 \end{pmatrix}$
+        *   **权重矩阵** (随机设定)：
+            $W_Q = \begin{pmatrix} 1 & 0 & 1 \\ 0 & 1 & 0 \\ 1 & 0 & 0 \\ 0 & 1 & 1 \end{pmatrix}$, $W_K = \begin{pmatrix} 0 & 1 & 1 \\ 1 & 0 & 1 \\ 1 & 1 & 0 \\ 0 & 0 & 1 \end{pmatrix}$, $W_V = \begin{pmatrix} 0 & 2 & 0 \\ 1 & 0 & 3 \\ 1 & 1 & 0 \\ 0 & 0 & 1 \end{pmatrix}$
+        *   **1. 计算 Q, K, V**：
+            $Q = Z_{in}W_Q = \begin{pmatrix} 2 & 0 & 1 \\ 0 & 2 & 1 \end{pmatrix}$
+            $K = Z_{in}W_K = \begin{pmatrix} 1 & 2 & 1 \\ 1 & 0 & 2 \end{pmatrix}$
+            $V = Z_{in}W_V = \begin{pmatrix} 1 & 3 & 0 \\ 1 & 0 & 4 \end{pmatrix}$
+        *   **2. 计算注意力分数** ($E=QK^T$)：
+            $QK^T = \begin{pmatrix} 2 & 0 & 1 \\ 0 & 2 & 1 \end{pmatrix} \begin{pmatrix} 1 & 1 \\ 2 & 0 \\ 1 & 2 \end{pmatrix} = \begin{pmatrix} 3 & 4 \\ 5 & 2 \end{pmatrix}$
+        *   **3. 缩放与归一化** (缩放因子 $\sqrt{d}=\sqrt{3} \approx 1.732$)：
+            $\frac{QK^T}{\sqrt{d}} \approx \begin{pmatrix} 1.732 & 2.309 \\ 2.887 & 1.155 \end{pmatrix}$
+            
+            对每一行应用 Softmax:
+            $\text{softmax}([1.732, 2.309]) = [0.359, 0.641]$
+            $\text{softmax}([2.887, 1.155]) = [0.850, 0.150]$
+            
+            注意力权重矩阵 $A = \begin{pmatrix} 0.359 & 0.641 \\ 0.850 & 0.150 \end{pmatrix}$
+        *   **4. 加权求和** ($Z'=AV$)：
+            $Z' = \begin{pmatrix} 0.359 & 0.641 \\ 0.850 & 0.150 \end{pmatrix} \begin{pmatrix} 1 & 3 & 0 \\ 1 & 0 & 4 \end{pmatrix} = \begin{pmatrix} 0.359 \cdot 1 + 0.641 \cdot 1 & 0.359 \cdot 3 + 0.641 \cdot 0 & 0.359 \cdot 0 + 0.641 \cdot 4 \\ 0.850 \cdot 1 + 0.150 \cdot 1 & 0.850 \cdot 3 + 0.150 \cdot 0 & 0.850 \cdot 0 + 0.150 \cdot 4 \end{pmatrix}$
+            $Z' = \begin{pmatrix} 1.000 & 1.077 & 2.564 \\ 1.000 & 2.550 & 0.600 \end{pmatrix}$
+        *   **结果**：$Z'$ 就是这个单头注意力模块的输出。第一个 token 的新表示 $[1.000, 1.077, 2.564]$ 是由 $35.9\%$ 的第一个 token 信息和 $64.1\%$ 的第二个 token 信息聚合而成。这清晰地展示了信息是如何在序列的不同部分之间动态流动和融合的。
     
 *   **前馈网络 (Feed-Forward Network, FFN)**: 这是一个简单的多层感知机（MLP），通常由两个线性层和一个 GELU 激活函数组成。它对自注意力层的输出进行非线性的逐点变换，进一步增强模型的表达能力。
 
