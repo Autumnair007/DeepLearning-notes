@@ -371,6 +371,204 @@ CUDA_VISIBLE_DEVICES=5,6,7 ./tools/dist_train.sh configs/segformer/my_segformer_
     ```
     **原理**: 在训练初期，通过 20 个 epoch 的线性学习率预热，让模型和优化器状态（如 AdamW 的动量）逐渐适应数据和较大的学习率，有效防止训练初期的震荡和崩溃。
 
+完整代码：
+```python
+# =========================================================================
+#
+#      SegFormer-MiT-B2 在 ADE20K(ADEChallengeData2016) 数据集上的
+#       训练配置文件 (v1.2 - 提高学习率并启用混合精度训练)
+#
+# 作者: Autumnair007
+# 日期: 2025-09-04
+#
+# =========================================================================
+
+# --- 第 1 部分: 继承基础配置 ---
+_base_ = [
+    '../_base_/models/segformer_mit-b0.py', # 基础模型结构，后续会覆盖
+    '../_base_/default_runtime.py'
+]
+
+checkpoint = 'checkpoints/mit_b2_converted_from_hf.pth'
+
+# --- 第 2 部分: 硬件与训练超参数 ---
+gpu_count = 3
+samples_per_gpu = 2
+num_workers = 8
+learning_rate = 3e-05 # <-- 修改: 提高学习率以适应更大的 batch size
+checkpoint_epoch = 10
+val_epoch = 10
+max_epochs = 200
+warmup_epochs = 20
+
+# --- 第 3 部分: 数据集配置 (ADE20K) ---
+dataset_type = 'ADE20KDataset'
+data_root = 'data/ADEChallengeData2016'
+crop_size = (512, 512)
+
+# 训练数据处理流水线
+train_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(type='LoadAnnotations', reduce_zero_label=True),
+    dict(
+        type='RandomResize',
+        scale=(2048, 512),
+        ratio_range=(0.5, 2.0),
+        keep_ratio=True),
+    dict(type='RandomCrop', crop_size=crop_size, cat_max_ratio=0.75),
+    dict(type='RandomFlip', prob=0.5),
+    dict(type='PhotoMetricDistortion'),
+    dict(type='RandomCutOut', 
+         prob=0.5, 
+         n_holes=(1, 3),
+         cutout_ratio=[(0.02, 0.02), (0.2, 0.2)],
+         fill_in=(0, 0, 0), 
+         seg_fill_in=255),
+    dict(type='Pad', size=crop_size),
+    dict(type='PackSegInputs')
+]
+
+# 测试数据处理流水线
+test_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(type='Resize', scale=(2048, 512), keep_ratio=True),
+    dict(type='LoadAnnotations', reduce_zero_label=True), # ADE20K 标签从 1 开始，0 是背景，需要减一
+    dict(type='PackSegInputs')
+]
+
+# --- 第 4 部分: 数据加载器配置 (ADE20K) ---
+train_dataloader = dict(
+    batch_size=samples_per_gpu,
+    num_workers=num_workers,
+    persistent_workers=True,
+    sampler=dict(type='DefaultSampler', shuffle=True),
+    dataset=dict(
+        type=dataset_type,
+        data_root=data_root,
+        data_prefix=dict(
+            img_path='images/training', seg_map_path='annotations/training'), # <-- 修改: ADE20K 路径
+        pipeline=train_pipeline))
+
+val_dataloader = dict(
+    batch_size=1,
+    num_workers=num_workers,
+    persistent_workers=True,
+    sampler=dict(type='DefaultSampler', shuffle=False),
+    dataset=dict(
+        type=dataset_type,
+        data_root=data_root,
+        data_prefix=dict(
+            img_path='images/validation', seg_map_path='annotations/validation'), # <-- 修改: ADE20K 路径
+        pipeline=test_pipeline))
+
+test_dataloader = val_dataloader
+
+# 评估器配置
+val_evaluator = dict(type='IoUMetric', iou_metrics=['mIoU'])
+test_evaluator = val_evaluator
+
+# --- 第 5 部分: 模型配置 ---
+data_preprocessor = dict(
+    size=crop_size
+)
+
+model = dict(
+    data_preprocessor=data_preprocessor,
+    backbone=dict(
+        # 保持 MiT-B2 的配置
+        init_cfg=dict(type='Pretrained', checkpoint=checkpoint),
+        embed_dims=64,
+        num_layers=[3, 4, 6, 3]),
+    decode_head=dict(
+        in_channels=[64, 128, 320, 512],
+        num_classes=150, # <-- 修改: ADE20K 类别数为 150
+        loss_decode=[
+            dict(
+                type='FocalLoss',
+                use_sigmoid=True,
+                loss_weight=0.5,),
+            dict(
+                type='DiceLoss',
+                loss_weight=1.0,
+                ignore_index=255) # ADE20K 的 ignore_index 也是 255
+        ]),
+)
+
+# --- 第 6 部分: 优化器与学习率策略 ---
+optimizer = dict(
+    type='AdamW', 
+    lr=learning_rate, 
+    betas=(0.9, 0.999), 
+    weight_decay=0.01
+)
+
+optim_wrapper = dict(
+    type='AmpOptimWrapper',  # 启用混合精度训练
+    optimizer=optimizer,
+    clip_grad=dict(max_norm=10, norm_type=2),  # 添加梯度裁剪稳定训练
+    loss_scale='dynamic',  # 动态损失缩放:
+    paramwise_cfg=dict(
+        custom_keys={
+            'pos_block': dict(decay_mult=0.),
+            'norm': dict(decay_mult=0.),
+            'head': dict(lr_mult=10.)  # 解码头使用更高学习率
+        }
+    )
+)
+
+param_scheduler = [
+    dict(
+        type='LinearLR',
+        start_factor=1e-6,
+        by_epoch=True,
+        begin=0,
+        end=warmup_epochs,
+    ),
+    dict(
+        type='PolyLR',
+        eta_min=0.0,
+        power=1.0,
+        by_epoch=True,
+        begin=warmup_epochs,
+        end=max_epochs,
+    )
+]
+
+# --- 第 7 部分: 训练、验证与测试循环配置 ---
+train_cfg = dict(
+    type='EpochBasedTrainLoop',
+    max_epochs=max_epochs,
+    val_interval=val_epoch)
+
+val_cfg = dict(type='ValLoop')
+test_cfg = dict(type='TestLoop')
+
+# --- 第 8 部分: 钩子与可视化配置 ---
+default_hooks = dict(
+    timer=dict(type='IterTimerHook'),
+    logger=dict(type='LoggerHook', interval=50, log_metric_by_epoch=True),
+    param_scheduler=dict(type='ParamSchedulerHook'),
+    checkpoint=dict(
+        type='CheckpointHook',
+        by_epoch=True,
+        interval=checkpoint_epoch,
+        max_keep_ckpts=3,
+        save_best='mIoU',
+        rule='greater'),
+    sampler_seed=dict(type='DistSamplerSeedHook'),
+    visualization=dict(type='SegVisualizationHook'))
+
+vis_backends = [
+    dict(type='LocalVisBackend'),
+    dict(type='TensorboardVisBackend')
+]
+visualizer = dict(
+    type='SegLocalVisualizer',
+    vis_backends=vis_backends,
+    name='visualizer'
+)
+```
+
 #### 最终总结与训练建议
 
 1.  **训练策略应该是“先快后慢”**: 用一个相对较大的学习率开始（如 `6e-5`），配合充足的 warmup，然后通过学习率调度器（如 `PolyLR`）平滑地降低它。
@@ -384,10 +582,47 @@ CUDA_VISIBLE_DEVICES=5,6,7 ./tools/dist_train.sh configs/segformer/my_segformer_
 
 1. **停止并删除当前的训练任务和输出。**
 2. 修改配置文件：
-   - 将 `learning_rate` 修改为 `4e-5`。
+   - 将 `learning_rate` 修改为 `2e-5`。
    - 将 `FocalLoss` 的 `loss_weight` 修改为 `0.5`。
+   - ```python
+     optim_wrapper = dict(
+         type='AmpOptimWrapper',  # 启用混合精度训练
+         optimizer=optimizer,
+         clip_grad=dict(max_norm=2, norm_type=2),  # max_norm 从10降为2
+         loss_scale='dynamic',  # 动态损失缩放:
+         paramwise_cfg=dict(
+             custom_keys={
+                 'pos_block': dict(decay_mult=0.),
+                 'norm': dict(decay_mult=0.),
+                 'head': dict(lr_mult=3.)  # 解码头使用更低学习率
+             }
+         )
+     )
+     param_scheduler = [
+         dict(
+             type='LinearLR',
+             start_factor=5e-7, # 从更小的学习率开始
+             by_epoch=True,
+             begin=0,
+             end=warmup_epochs,
+         ),
+         dict(
+             type='PolyLR',
+             eta_min=0.0,
+             power=1.0,
+             by_epoch=True,
+             begin=warmup_epochs,
+             end=max_epochs,
+         )
+     ]
+     ```
+   - 
 3. **从零开始训练**：确保你加载的是原始的 ImageNet 预训练权重 (`mit_b2_converted_from_hf.pth`)，而不是中途出错的检查点。
 4. **密切观察**：在新训练开始后，密切关注前几个 epoch 的 `loss` 和 `grad_norm`。它们应该是有值的、平稳的，并且 `grad_norm` 不应出现 `nan` 或 `inf`。
+
+### V1.4 修改
+
+重新返回V1版本，只修改超参数提高学习效率。
 
 ***
 
