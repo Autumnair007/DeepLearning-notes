@@ -629,11 +629,170 @@ visualizer = dict(
 #### 评估模型代码：
 
 ```bash
-CONFIG_FILE="configs/segformer/my_segformer_mit-b2_3xb6-400e_finetune.py"
+CONFIG_FILE="configs/segformer/my_segformer_mit-b2_512x512_200e_ade20k.py"
 # 【注意】工作目录名会根据配置文件名自动改变
-CHECKPOINT_FILE="work_dirs/my_segformer_mit-b2_3xb6-400e_finetune/best_mIoU_epoch_190.pth"
+CHECKPOINT_FILE="work_dirs/my_segformer_mit-b2_512x512_200e_ade20k/best_mIoU_epoch_200.pth"
 
-CUDA_VISIBLE_DEVICES=5 python tools/test.py $CONFIG_FILE $CHECKPOINT_FILE --show-dir outputs/segformer_400e_finetune
+CUDA_VISIBLE_DEVICES=7 python tools/test.py $CONFIG_FILE $CHECKPOINT_FILE --show-dir outputs/my_segformer_mit-b2_512x512_200e_ade20k
 ```
 
 评估结果如下：
+
+```bash
++---------------------+-------+-------+
+|        Class        |  IoU  |  Acc  |
++---------------------+-------+-------+
+|         wall        | 67.15 | 84.24 |
+|       building      | 76.19 | 89.75 |
+|         sky         |  92.8 | 96.28 |
+|        floor        | 70.86 | 85.45 |
+|         tree        | 66.91 | 82.55 |
+|       ceiling       | 76.86 | 87.59 |
+|         road        | 74.37 |  83.9 |
+|         bed         | 74.93 | 89.79 |
+|      windowpane     | 49.28 | 66.96 |
+|        grass        | 58.97 | 73.65 |
+|       cabinet       |  45.1 | 64.43 |
+|       sidewalk      | 51.46 | 73.26 |
+|        person       | 60.44 | 82.75 |
+|        earth        | 28.62 | 40.68 |
+|         door        | 23.29 | 34.51 |
+|        table        | 35.22 |  51.5 |
+|       mountain      | 45.44 | 61.54 |
+|        plant        | 43.97 | 56.34 |
+|       curtain       | 54.96 | 72.73 |
+|        chair        | 34.94 | 48.77 |
+|         car         |  66.4 | 85.14 |
+|        water        | 41.64 | 52.21 |
+|       painting      | 53.86 | 73.37 |
+|         sofa        | 47.81 | 69.64 |
+|        shelf        | 30.92 | 44.93 |
+|        house        | 34.87 | 53.68 |
+|         sea         | 43.52 |  71.0 |
+|        mirror       | 39.08 | 50.79 |
+|         rug         | 36.33 | 43.27 |
+|        field        | 18.19 |  33.2 |
+|       armchair      | 23.23 |  36.2 |
+|         seat        | 43.28 | 61.57 |
+|        fence        | 17.94 | 25.43 |
+|         desk        | 26.63 | 40.17 |
+|         rock        | 32.33 | 56.22 |
+|       wardrobe      | 40.92 | 58.96 |
+|         lamp        | 32.78 | 43.36 |
+|       bathtub       | 42.77 | 55.14 |
+|       railing       | 19.11 |  25.0 |
+|       cushion       | 26.29 | 37.42 |
+|         base        |  8.38 | 13.93 |
+|         box         |  6.13 |  7.55 |
+|        column       |  27.1 | 34.03 |
+|      signboard      | 15.69 | 19.81 |
+|   chest of drawers  | 25.94 | 39.62 |
+|       counter       | 22.39 | 31.81 |
+|         sand        | 28.88 | 35.97 |
+|         sink        | 35.17 | 54.04 |
+|      skyscraper     |  60.2 | 71.27 |
+|      fireplace      | 47.15 | 70.97 |
+|     refrigerator    | 43.39 | 60.99 |
+|      grandstand     | 23.44 | 55.99 |
+|         path        | 10.98 | 15.29 |
+|        stairs       |  20.8 |  25.2 |
+|        runway       | 65.27 |  87.8 |
+|         case        | 26.78 | 54.86 |
+|      pool table     | 75.74 | 91.52 |
+|        pillow       | 33.76 | 43.19 |
+|     screen door     | 41.41 | 47.61 |
+|       stairway      | 19.44 | 24.21 |
+|        river        |  7.54 | 20.81 |
+|        bridge       | 16.91 | 23.89 |
+|       bookcase      | 26.62 | 37.06 |
+|        blind        | 13.34 | 14.58 |
+|     coffee table    | 34.64 | 65.62 |
+|        toilet       | 54.05 | 73.42 |
+|        flower       | 23.57 | 36.22 |
+|         book        | 24.32 | 30.24 |
+|         hill        |  8.17 | 15.48 |
+|        bench        | 31.21 | 37.15 |
+|      countertop     | 30.52 | 42.78 |
+|        stove        | 42.08 | 59.97 |
+|         palm        | 27.38 | 31.67 |
+|    kitchen island   | 14.08 | 30.61 |
+|       computer      | 35.85 | 50.55 |
+|     swivel chair    |  22.1 | 36.86 |
+|         boat        | 29.31 | 44.59 |
+|         bar         | 15.11 | 16.17 |
+|    arcade machine   | 10.51 | 14.39 |
+|        hovel        | 17.82 | 34.53 |
+|         bus         | 44.67 | 70.25 |
+|        towel        | 18.72 | 24.73 |
+|        light        | 34.31 | 37.72 |
+|        truck        |  0.46 |  0.59 |
+|        tower        | 15.07 | 19.57 |
+|      chandelier     | 43.98 | 59.05 |
+|        awning       | 10.41 |  12.2 |
+|     streetlight     |  1.71 |  1.76 |
+|        booth        |  9.97 | 15.91 |
+| television receiver | 34.98 | 50.55 |
+|       airplane      | 31.28 | 54.78 |
+|      dirt track     |  7.6  | 20.71 |
+|       apparel       | 21.06 | 31.08 |
+|         pole        |  1.72 |  1.83 |
+|         land        |  0.26 |  0.34 |
+|      bannister      |  0.01 |  0.01 |
+|      escalator      |  2.13 |  3.35 |
+|       ottoman       |  4.73 |  5.18 |
+|        bottle       |  1.32 |  1.55 |
+|        buffet       | 22.07 | 29.64 |
+|        poster       |  0.03 |  0.03 |
+|        stage        |  3.83 |  7.08 |
+|         van         |  6.63 |  7.71 |
+|         ship        |  3.33 |  4.19 |
+|       fountain      |  0.21 |  0.25 |
+|    conveyer belt    |  28.7 | 52.95 |
+|        canopy       |  5.9  |  7.13 |
+|        washer       | 33.19 | 39.06 |
+|      plaything      |  6.08 | 13.78 |
+|    swimming pool    | 43.32 | 49.34 |
+|        stool        |  1.47 |  1.56 |
+|        barrel       |  0.58 |  5.67 |
+|        basket       |  2.12 |  2.18 |
+|      waterfall      | 54.48 | 70.31 |
+|         tent        | 71.38 | 97.19 |
+|         bag         |  0.0  |  0.0  |
+|       minibike      |  19.2 | 29.55 |
+|        cradle       | 53.21 | 75.67 |
+|         oven        |  1.37 |  1.63 |
+|         ball        |  8.95 |  24.2 |
+|         food        | 28.69 | 30.77 |
+|         step        |  0.0  |  0.0  |
+|         tank        |  5.53 |  5.82 |
+|      trade name     |  7.88 |  8.0  |
+|      microwave      | 21.53 | 24.85 |
+|         pot         |  6.59 |  7.65 |
+|        animal       | 30.88 | 32.84 |
+|       bicycle       | 14.78 | 23.88 |
+|         lake        | 48.57 | 65.44 |
+|      dishwasher     | 21.98 |  35.7 |
+|        screen       | 60.27 | 80.29 |
+|       blanket       |  0.0  |  0.0  |
+|      sculpture      |  6.67 |  9.7  |
+|         hood        | 17.46 | 22.01 |
+|        sconce       |  7.73 |  8.11 |
+|         vase        |  4.17 |  4.68 |
+|    traffic light    |  3.43 |  3.62 |
+|         tray        |  0.0  |  0.0  |
+|        ashcan       |  7.76 |  9.75 |
+|         fan         | 24.87 | 32.14 |
+|         pier        |  9.29 | 15.58 |
+|      crt screen     |  0.03 |  0.04 |
+|        plate        | 10.12 | 10.83 |
+|       monitor       |  0.8  |  0.81 |
+|    bulletin board   |  6.82 |  7.3  |
+|        shower       |  0.0  |  0.0  |
+|       radiator      | 19.68 | 19.92 |
+|        glass        |  0.08 |  0.08 |
+|        clock        |  0.17 |  0.18 |
+|         flag        |  1.56 |  1.6  |
++---------------------+-------+-------+
+09/08 11:11:31 - mmengine - INFO - Iter(test) [2000/2000]    aAcc: 74.0900  mIoU: 26.6000  mAcc: 36.2500  data_time: 1.1006  time: 1.1699
+```
+
