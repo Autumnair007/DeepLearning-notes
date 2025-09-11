@@ -294,20 +294,23 @@ MaskFormer 的核心思想是将分割任务重新定义为一个**掩码分类�
 **数据流过程**：两个分支都接收来自 Transformer 模块的相同的每段嵌入作为输入。
 
 #### a) 类别预测分支 (Classification Head)
+
 *   **作用**：为 $N$ 个每段嵌入中的每一个预测其对应的类别。
 *   **输入**：$N$ 个每段嵌入向量 $Q_{seg\_emb} \in \mathbb{R}^{N \times C_Q}$ (例如，`100x256`)。
 *   **操作**：通过一个简单的线性分类器（Linear Layer）后接一个 Softmax 函数，将每个嵌入向量映射到一个类别概率分布上。
 *   **输出**：一个维度为 $N \times (K+1)$ 的概率分布矩阵 $P_{class} \in \mathbb{R}^{N \times (K+1)}$。其中 $K$ 是数据集中物体的类别总数，“+1”代表“无目标”（no object, $\emptyset$）这个特殊的类别，用于处理那些没有匹配到任何真实物体的查询。$P_{class}[i,j]$ 表示第 $i$ 个查询预测出的物体属于第 $j$ 个类别的概率。
 
 #### b) 掩码预测分支 (Mask Head)
+
 *   **作用**：为 $N$ 个每段嵌入中的每一个生成一个对应的二值分割掩码。
 *   **输入**：
+    
     1.  $N$ 个每段嵌入向量 $Q_{seg\_emb} \in \mathbb{R}^{N \times C_Q}$ (例如，`100x256`)。
     2.  来自**像素级模块**输出的逐像素嵌入特征图 $E_{pixel} \in \mathbb{R}^{C_E \times H/4 \times W/4}$。
 *   **操作**：这是一个两步过程。
     
     1.  **生成掩码嵌入**：首先，一个 MLP 将高维的每段嵌入 $Q_{seg\_emb}$ 转换为一个同样维度的掩码嵌入 $E_{mask}$。
-    2.  **点积生成掩码**：然后，通过计算每个查询的掩码嵌入与图像上每个像素的嵌入之间的点积（相似度），来生成最终的掩码。
+    2.  **点积生成掩码**：然后，通过计算每个查询的掩码嵌入与图像上每个像素的嵌入之间的**点积**（相似度），来生成最终的掩码。
     
     >2. 点积 / 内积 (Dot Product / Inner Product)
     >
@@ -315,7 +318,7 @@ MaskFormer 的核心思想是将分割任务重新定义为一个**掩码分类�
     >- **符号**：`·` 或 `<, >`
     >- **例子**：
     >  $\vec{a} = [1, 2, 3], \quad \vec{b} = [4, 5, 6]$
-    >  $\vec{a} \cdot \vec{b} = (1*4) + (2*5) + (3*6) = 4 + 10 + 18 = 32$
+    >   $\vec{a} \cdot \vec{b} = (1*4) + (2*5) + (3*6) = 4 + 10 + 18 = 32$
 *   **输出**：$N$ 个二值掩码预测 $M_{final} \in \mathbb{R}^{N \times H \times W}$。论文指出，使用 Sigmoid 而非 Softmax 激活是关键，因为它允许掩码之间重叠，这对于处理实例分割中的遮挡至关重要。
 
 ### 详细数据流与张量变化
@@ -328,6 +331,7 @@ MaskFormer 的核心思想是将分割任务重新定义为一个**掩码分类�
     *   **逐像素嵌入**: $E_{pixel} \in \mathbb{R}^{256 \times H' \times W'}$
     
 *   **Step 1: 类别预测 (Classification Prediction)**
+    
     *   输入: $Q_{seg\_emb} \in \mathbb{R}^{100 \times 256}$
     *   操作: 通过一个线性层 `nn.Linear(256, K+1)` 进行变换。
     $$
@@ -336,7 +340,7 @@ MaskFormer 的核心思想是将分割任务重新定义为一个**掩码分类�
     *   张量变化: $\mathbb{R}^{100 \times 256} \rightarrow \mathbb{R}^{100 \times (K+1)}$
     *   经过 Softmax 激活后，得到最终的类别概率。
     *   输出: $P_{class} \in \mathbb{R}^{100 \times (K+1)}$
-
+    
 *   **Step 2: 掩码嵌入生成 (Mask Embedding Generation)**
     *   输入: $Q_{seg\_emb} \in \mathbb{R}^{100 \times 256}$
     *   操作: 通过一个 MLP（论文中明确为2个隐藏层，256通道）进行变换。这个 MLP 的作用是学习一个从“类别-位置”的抽象嵌入到“如何形成掩码”的嵌入的映射。
@@ -347,6 +351,7 @@ MaskFormer 的核心思想是将分割任务重新定义为一个**掩码分类�
     *   输出: $E_{mask} \in \mathbb{R}^{100 \times 256}$
 
 *   **Step 3: 掩码生成与上采样 (Mask Generation & Upsampling)**
+    
     *   输入1: $E_{mask} \in \mathbb{R}^{100 \times 256}$
     *   输入2: $E_{pixel} \in \mathbb{R}^{256 \times H' \times W'}$
     *   操作 (点积): 通过矩阵乘法高效计算所有查询与所有像素的点积。
