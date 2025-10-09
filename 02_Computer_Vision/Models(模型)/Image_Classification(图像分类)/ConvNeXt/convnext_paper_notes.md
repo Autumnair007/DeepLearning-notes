@@ -1,9 +1,18 @@
+---
+type: "paper-note"
+area: "Computer-Vision"
+task: "Image-Classification"
+model: "ConvNeXt"
+year: 2022
+publication: "CVPR"
+tags: [paper, cnn, classification]
+status: "done"
+---
 #  ConvNeXt论文笔记（Gemini2.5-flash生成）
 
 论文原文：[[2201.03545\] A ConvNet for the 2020s](https://arxiv.org/abs/2201.03545)
 
 ------
-
 ## 摘要
 
 视觉识别的“咆哮的20年代”始于Vision Transformers（ViTs）的引入，它们迅速取代了ConvNets成为最先进的图像分类模型。然而，通用ViT在应用于通用计算机视觉任务（如目标检测和语义分割）时面临困难。分层Transformer（如Swin Transformer）重新引入了几个ConvNet先验，使得Transformer实际成为通用的视觉骨干网络，并在各种视觉任务中表现出色。然而，这些混合方法的有效性主要归因于Transformer内在的优越性，而非卷积固有的归纳偏置。在这项工作中，我们重新审视了设计空间，并测试了纯ConvNet所能达到的极限。我们逐步将标准ResNet“现代化”为视觉Transformer的设计，并在此过程中发现了导致性能差异的几个关键组件。这项探索的结果是一个名为ConvNeXt的纯ConvNet模型家族。ConvNeXts完全由标准ConvNet模块构建，在准确性和可扩展性方面与Transformer竞争激烈，在ImageNet上达到了87.8%的top-1准确率，并在COCO目标检测和ADE20K分割任务上优于Swin Transformer，同时保持了标准ConvNets的简洁和高效。

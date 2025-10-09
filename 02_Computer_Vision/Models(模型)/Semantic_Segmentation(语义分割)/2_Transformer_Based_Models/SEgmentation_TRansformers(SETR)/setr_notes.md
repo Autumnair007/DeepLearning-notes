@@ -2,7 +2,7 @@
 
 参考资料：[(2 封私信 / 28 条消息) 重新思考语义分割范式——SETR - 知乎](https://zhuanlan.zhihu.com/p/348418189)
 
-[CV(SETR)中的Transformer核心概念解析 (源自NLP)](../../../Computer_Vision_Theory(计算机视觉理论)/Basic_Knowledge_of_Image_Segmentation/CV中的Transformer核心概念解析.md)
+[CV(SETR)中的Transformer核心概念解析 (源自NLP)](../../../../Computer_Vision_Theory(计算机视觉理论)/Basic_Knowledge_of_Image_Segmentation/CV中的Transformer核心概念解析.md)
 
 ------
 

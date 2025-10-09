@@ -1,3 +1,17 @@
+---
+type: paper-note
+area: Computer-Vision
+task: Image-Classification
+model: Swin Transformer
+year: 2021
+publication: ICCV
+tags:
+  - paper
+  - transformer
+  - classification
+  - vit
+status: done
+---
 #  Swin Transformer论文笔记（Gemini2.5-flash生成）
 
 论文原文：[2103.14030](https://arxiv.org/pdf/2103.14030)

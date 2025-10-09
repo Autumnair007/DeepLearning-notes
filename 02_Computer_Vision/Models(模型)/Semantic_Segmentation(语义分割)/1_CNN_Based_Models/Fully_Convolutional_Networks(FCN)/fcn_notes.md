@@ -6,7 +6,7 @@
 
 **相关概念**:
 
-*   转置卷积：[下采样与上采样](../../../../01_Fundamentals(基础知识)/Basic_Concepts (基础概念)/downsampling_and_upsampling(下采样与上采样).md)
+*   转置卷积：[下采样与上采样](../../../../../01_Fundamentals(基础知识)/Basic_Concepts(基础概念)/downsampling_and_upsampling(下采样与上采样).md)
 
 ---
 
