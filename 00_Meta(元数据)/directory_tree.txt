@@ -1,17 +1,18 @@
-Directory Tree generated on 2025-09-22 16:35:28.147399
-Root: D:\AfterDownload\Data\GithubRepository\DeepLearning-notes
+Directory Tree generated on 2025-10-09 12:25:19.432782
+Root: E:\Data\GitHubRepo\DeepLearning-notes
 
 │   ├── .gitattributes
 │   ├── .gitignore
 │   ├── LICENSE
 │   ├── README.md
-│   ├── 深度学习.lnk
 │   ├── .obsidian/
 │   │   ├── app.json
 │   │   ├── appearance.json
 │   │   ├── core-plugins.json
 │   │   ├── graph.json
 │   │   ├── workspace.json
+│   │   ├── snippets/
+│   │   │   ├── page-width.css
 │   ├── 00_Meta(元数据)/
 │   │   ├── directory_tree.py
 │   │   ├── directory_tree.txt
@@ -125,6 +126,7 @@ Root: D:\AfterDownload\Data\GithubRepository\DeepLearning-notes
 │   │   │   │   │   ├── dinov2_code_notes_detailed.md
 │   │   │   │   │   ├── dinov2_notes.md
 │   │   │   │   │   ├── dinov2_paper_notes.md
+│   │   │   │   │   ├── dinov2_notes.assets/
 │   │   │   ├── Semantic_Segmentation(语义分割)/
 │   │   │   │   ├── 图像分割模型对比.md
 │   │   │   │   ├── 图像分割模型对比表格.xlsx
@@ -197,6 +199,13 @@ Root: D:\AfterDownload\Data\GithubRepository\DeepLearning-notes
 │   │   │   │   │   │   ├── train_sam.py
 │   │   │   │   │   ├── sam_notes.assets/
 │   │   │   │   │   ├── sam_paper_notes.assets/
+│   │   │   │   ├── Training-Free_Segmentation/
+│   │   │   │   │   ├── ITACLIP/
+│   │   │   │   │   │   ├── Aydin_ITACLIP_Boosting_Training-Free_Semantic_Segmentation_with_Image_Text_and_Architectural_CVPRW_2025_paper.pdf
+│   │   │   │   │   │   ├── ITACLIP_papers_notes.md
+│   │   │   │   │   ├── ReME/
+│   │   │   │   │   │   ├── ReME A Data-Centric Framework for Training-Free Open-Vocabulary Segmentation.pdf
+│   │   │   │   │   │   ├── ReME A Data-Centric Framework for Training-Free Open-Vocabulary Segmentation论文笔记.md
 │   │   │   │   ├── U-Net/
 │   │   │   │   │   ├── u-net_notes.md
 │   │   │   │   │   ├── u-net_notes.assets/
